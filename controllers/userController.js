@@ -9,7 +9,6 @@ const generateToken = (id, role) => {
   });
 };
 
-// Register new user
 const registerUser = async (req, res, next) => {
   try {
     // Check for validation errors
@@ -18,7 +17,8 @@ const registerUser = async (req, res, next) => {
       return next(createError(400, errors.array()[0].msg));
     }
 
-    const { username, email, password } = req.body;
+    const { firstName, lastName, dateOfBirth, username, email, password } =
+      req.body;
 
     // Check if user already exists
     const existingUser = await User.findOne({
@@ -34,8 +34,13 @@ const registerUser = async (req, res, next) => {
     // Create new user
     const user = new User({
       username,
+      lastName,
+      firstName,
+      dateOfBirth,
       email,
       password,
+      role: "user",
+      isActive: true,
     });
 
     await user.save();
@@ -44,6 +49,9 @@ const registerUser = async (req, res, next) => {
 
     res.status(201).json({
       _id: user._id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      dateOfBirth: user.dateOfBirth,
       username: user.username,
       email: user.email,
       role: user.role,
@@ -78,6 +86,9 @@ const loginUser = async (req, res, next) => {
     res.json({
       _id: user._id,
       username: user.username,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      dateOfBirth: user.dateOfBirth,
       email: user.email,
       role: user.role,
       token: token,

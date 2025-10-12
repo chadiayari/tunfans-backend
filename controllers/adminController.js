@@ -262,15 +262,6 @@ module.exports = {
   getUserDetails,
   updateUserStatus,
 
-  // Order management
-  getOrders,
-  getOrderDetails,
-  updateOrderStatus,
-
-  // Payment management
-  getPaymentAnalytics,
-  getFailedPayments,
-
   // Dashboard
   getDashboardOverview,
 };
