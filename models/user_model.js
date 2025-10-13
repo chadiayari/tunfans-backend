@@ -60,6 +60,20 @@ const userSchema = new mongoose.Schema({
   statusUpdatedAt: {
     type: Date,
   },
+  // Profile information
+  profileImage: {
+    type: String, // URL to the profile image
+    default: null,
+  },
+  coverImage: {
+    type: String, // URL to the cover image
+    default: null,
+  },
+  bio: {
+    type: String,
+    maxlength: 500,
+    default: "",
+  },
   // Subscription-related fields
   subscriptionPrice: {
     type: Number,
@@ -103,6 +117,15 @@ const userSchema = new mongoose.Schema({
     default: 0,
   },
   availableBalance: {
+    type: Number,
+    default: 0,
+  },
+  // Subscription stats
+  subscriberCount: {
+    type: Number,
+    default: 0,
+  },
+  subscriptionCount: {
     type: Number,
     default: 0,
   },

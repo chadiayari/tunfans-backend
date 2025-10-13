@@ -114,8 +114,14 @@ const getUserProfile = async (req, res, next) => {
       user: {
         _id: user._id,
         username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
         email: user.email,
         role: user.role,
+        profileImage: user.profileImage,
+        coverImage: user.coverImage,
+        bio: user.bio,
+        subscriptionPrice: user.subscriptionPrice,
         createdAt: user.createdAt,
         isActive: user.isActive,
       },
@@ -389,6 +395,228 @@ const maskAccountDetails = (type, accountDetails) => {
   return masked;
 };
 
+// Upload profile image
+const uploadProfileImage = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    const uploadResult = req.uploadResult; // Set by processProfileImageUpload middleware
+
+    if (!uploadResult) {
+      return next(createError(400, "No upload result found"));
+    }
+
+    // Update user's profile image URL
+    const user = await User.findById(userId);
+    if (!user) {
+      return next(createError(404, "User not found"));
+    }
+
+    user.profileImage = uploadResult.url;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: "Profile image uploaded successfully",
+      profileImage: user.profileImage,
+      uploadDetails: {
+        filename: uploadResult.filename,
+        originalname: uploadResult.originalname,
+        size: uploadResult.size,
+      },
+    });
+  } catch (error) {
+    console.error("Upload profile image error:", error);
+    next(error);
+  }
+};
+
+// Upload cover image
+const uploadCoverImage = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    const uploadResult = req.uploadResult; // Set by processCoverImageUpload middleware
+
+    if (!uploadResult) {
+      return next(createError(400, "No upload result found"));
+    }
+
+    // Update user's cover image URL
+    const user = await User.findById(userId);
+    if (!user) {
+      return next(createError(404, "User not found"));
+    }
+
+    user.coverImage = uploadResult.url;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: "Cover image uploaded successfully",
+      coverImage: user.coverImage,
+      uploadDetails: {
+        filename: uploadResult.filename,
+        originalname: uploadResult.originalname,
+        size: uploadResult.size,
+      },
+    });
+  } catch (error) {
+    console.error("Upload cover image error:", error);
+    next(error);
+  }
+};
+
+// Search users
+const searchUsers = async (req, res, next) => {
+  try {
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return next(createError(400, errors.array()[0].msg));
+    }
+
+    const { q, page = 1, limit = 20, filter } = req.query;
+
+    const searchQuery = q.trim();
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Build search criteria
+    let searchCriteria = {
+      isActive: true, // Only show active users
+      $or: [
+        { username: { $regex: searchQuery, $options: "i" } },
+        { firstName: { $regex: searchQuery, $options: "i" } },
+        { lastName: { $regex: searchQuery, $options: "i" } },
+        {
+          $expr: {
+            $regexMatch: {
+              input: { $concat: ["$firstName", " ", "$lastName"] },
+              regex: searchQuery,
+              options: "i",
+            },
+          },
+        },
+      ],
+    };
+
+    // Apply additional filters
+    if (filter) {
+      switch (filter) {
+        case "creators":
+          searchCriteria.subscriptionPrice = { $gt: 0 };
+          break;
+        case "verified":
+          searchCriteria.isVerified = true;
+          break;
+        case "online":
+          // Add online status filter if you have this field
+          searchCriteria.lastLoginAt = {
+            $gte: new Date(Date.now() - 30 * 60 * 1000),
+          }; // Active in last 30 mins
+          break;
+      }
+    }
+
+    // Execute search with pagination
+    const [users, totalCount] = await Promise.all([
+      User.find(searchCriteria)
+        .select(
+          "username firstName lastName profileImage coverImage subscriptionPrice createdAt lastLoginAt"
+        )
+        .sort({
+          // Prioritize exact username matches, then by creation date
+          username:
+            searchQuery.toLowerCase() === searchQuery.toLowerCase() ? -1 : 1,
+          createdAt: -1,
+        })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      User.countDocuments(searchCriteria),
+    ]);
+
+    // Format user data for response
+    const formattedUsers = users.map((user) => ({
+      _id: user._id,
+      username: user.username,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      fullName: `${user.firstName} ${user.lastName}`,
+      profileImage: user.profileImage,
+      coverImage: user.coverImage,
+      subscriptionPrice: user.subscriptionPrice || 0,
+      isCreator: (user.subscriptionPrice || 0) > 0,
+      joinedAt: user.createdAt,
+      // Don't expose sensitive information like lastLoginAt to other users
+    }));
+
+    const totalPages = Math.ceil(totalCount / limitNum);
+
+    res.json({
+      success: true,
+      query: searchQuery,
+      users: formattedUsers,
+      pagination: {
+        currentPage: pageNum,
+        totalPages,
+        totalCount,
+        limit: limitNum,
+        hasNext: pageNum < totalPages,
+        hasPrev: pageNum > 1,
+      },
+    });
+  } catch (error) {
+    console.error("Search users error:", error);
+    next(error);
+  }
+};
+
+// Get user profile by username (public profile)
+const getUserByUsername = async (req, res, next) => {
+  try {
+    const { username } = req.params;
+
+    if (!username) {
+      return next(createError(400, "Username is required"));
+    }
+
+    const user = await User.findOne({ 
+      username: username, 
+      isActive: true 
+    }).select("-password -payoutMethods -totalEarnings -availableBalance");
+
+    if (!user) {
+      return next(createError(404, "User not found"));
+    }
+
+    // Return public profile information
+    res.json({
+      success: true,
+      user: {
+        _id: user._id,
+        username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        profileImage: user.profileImage,
+        coverImage: user.coverImage,
+        subscriptionPrice: user.subscriptionPrice,
+        subscriberCount: user.subscriberCount,
+        subscriptionCount: user.subscriptionCount,
+        role: user.role,
+        createdAt: user.createdAt,
+        // Only show email if it's the current user or an admin
+        ...(req.user && (req.user._id.toString() === user._id.toString() || req.user.role === 'admin') 
+          ? { email: user.email } 
+          : {}),
+      },
+    });
+  } catch (error) {
+    console.error("Get user by username error:", error);
+    next(error);
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
@@ -398,4 +626,8 @@ module.exports = {
   addPayoutMethod,
   getPayoutMethods,
   setDefaultPayoutMethod,
+  uploadProfileImage,
+  uploadCoverImage,
+  searchUsers,
+  getUserByUsername,
 };

@@ -92,10 +92,35 @@ const payoutMethodValidation = [
     .withMessage("Stripe account ID is required"),
 ];
 
+const { query } = require("express-validator");
+
+const searchUsersValidation = [
+  query("q")
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage("Search query must be between 2 and 100 characters"),
+
+  query("page")
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage("Page must be a positive integer"),
+
+  query("limit")
+    .optional()
+    .isInt({ min: 1, max: 50 })
+    .withMessage("Limit must be between 1 and 50"),
+
+  query("filter")
+    .optional()
+    .isIn(["creators", "verified", "online"])
+    .withMessage("Filter must be one of: creators, verified, online"),
+];
+
 module.exports = {
   userRegistrationValidation,
   userLoginValidation,
   userUpdateValidation,
   subscriptionPriceValidation,
   payoutMethodValidation,
+  searchUsersValidation,
 };
