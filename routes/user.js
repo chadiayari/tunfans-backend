@@ -13,6 +13,7 @@ const {
   uploadCoverImage,
   searchUsers,
   getUserByUsername,
+  getCurrentUser,
 } = require("../controllers/userController");
 const {
   uploadProfileImage,
@@ -75,6 +76,7 @@ router.post("/register", userRegistrationValidation, registerUser);
 router.post("/login", userLoginValidation, loginUser);
 
 // Protected routes (requires authentication)
+router.get("/me", authenticate, getCurrentUser);
 router.get("/profile", authenticate, userOrAdmin, getUserProfile);
 router.put(
   "/profile",

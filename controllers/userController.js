@@ -546,7 +546,6 @@ const searchUsers = async (req, res, next) => {
       profileImage: user.profileImage,
       coverImage: user.coverImage,
       subscriptionPrice: user.subscriptionPrice || 0,
-      isCreator: (user.subscriptionPrice || 0) > 0,
       joinedAt: user.createdAt,
       // Don't expose sensitive information like lastLoginAt to other users
     }));
@@ -619,6 +618,57 @@ const getUserByUsername = async (req, res, next) => {
   }
 };
 
+// Get current logged-in user info
+const getCurrentUser = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+
+    const user = await User.findById(userId).select("-password");
+
+    if (!user) {
+      return next(createError(404, "User not found"));
+    }
+
+    res.json({
+      success: true,
+      user: {
+        _id: user._id,
+        username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        profileImage: user.profileImage,
+        coverImage: user.coverImage,
+        subscriptionPrice: user.subscriptionPrice,
+        subscriberCount: user.subscriberCount,
+        subscriptionCount: user.subscriptionCount,
+        totalEarnings: user.totalEarnings,
+        availableBalance: user.availableBalance,
+        role: user.role,
+        isActive: user.isActive,
+        createdAt: user.createdAt,
+        lastLoginAt: user.lastLoginAt,
+        payoutMethods: user.payoutMethods
+          ? user.payoutMethods.map((method) => ({
+              _id: method._id,
+              type: method.type,
+              isDefault: method.isDefault,
+              isVerified: method.isVerified,
+              createdAt: method.createdAt,
+              accountDetails: maskAccountDetails(
+                method.type,
+                method.accountDetails
+              ),
+            }))
+          : [],
+      },
+    });
+  } catch (error) {
+    console.error("Get current user error:", error);
+    next(error);
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
@@ -632,4 +682,5 @@ module.exports = {
   uploadCoverImage,
   searchUsers,
   getUserByUsername,
+  getCurrentUser,
 };
