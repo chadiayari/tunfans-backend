@@ -41,29 +41,12 @@ const loginAdmin = async (req, res, next) => {
 };
 
 const verifyToken = async (req, res) => {
-  res.json({ valid: true });
-};
-
-// Check authentication and return user info
-const checkAuth = async (req, res, next) => {
-  try {
-    res.json({
-      success: true,
-      user: {
-        email: req.user.email,
-        name: req.user.username,
-        role: req.userRole,
-        _id: req.user._id,
-      },
-    });
-  } catch (error) {
-    console.error("Check auth error:", error);
-    next(error);
-  }
+  res.json({
+    data: req.user,
+  });
 };
 
 module.exports = {
   loginAdmin,
   verifyToken,
-  checkAuth,
 };
