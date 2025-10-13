@@ -581,9 +581,9 @@ const getUserByUsername = async (req, res, next) => {
       return next(createError(400, "Username is required"));
     }
 
-    const user = await User.findOne({ 
-      username: username, 
-      isActive: true 
+    const user = await User.findOne({
+      username: username,
+      isActive: true,
     }).select("-password -payoutMethods -totalEarnings -availableBalance");
 
     if (!user) {
@@ -606,8 +606,10 @@ const getUserByUsername = async (req, res, next) => {
         role: user.role,
         createdAt: user.createdAt,
         // Only show email if it's the current user or an admin
-        ...(req.user && (req.user._id.toString() === user._id.toString() || req.user.role === 'admin') 
-          ? { email: user.email } 
+        ...(req.user &&
+        (req.user._id.toString() === user._id.toString() ||
+          req.user.role === "admin")
+          ? { email: user.email }
           : {}),
       },
     });
