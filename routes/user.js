@@ -5,12 +5,18 @@ const {
   loginUser,
   getUserProfile,
   updateUserProfile,
+  updateSubscriptionPrice,
+  addPayoutMethod,
+  getPayoutMethods,
+  setDefaultPayoutMethod,
 } = require("../controllers/userController");
 const { authenticate, userOrAdmin } = require("../middleware/authMiddleware");
 const {
   userRegistrationValidation,
   userLoginValidation,
   userUpdateValidation,
+  subscriptionPriceValidation,
+  payoutMethodValidation,
 } = require("../validators/userValidators");
 
 // Public routes
@@ -25,6 +31,29 @@ router.put(
   userOrAdmin,
   userUpdateValidation,
   updateUserProfile
+);
+
+// Subscription-related routes
+router.put(
+  "/subscription-price",
+  authenticate,
+  userOrAdmin,
+  subscriptionPriceValidation,
+  updateSubscriptionPrice
+);
+router.post(
+  "/payout-methods",
+  authenticate,
+  userOrAdmin,
+  payoutMethodValidation,
+  addPayoutMethod
+);
+router.get("/payout-methods", authenticate, userOrAdmin, getPayoutMethods);
+router.put(
+  "/payout-methods/:id",
+  authenticate,
+  userOrAdmin,
+  setDefaultPayoutMethod
 );
 
 module.exports = router;

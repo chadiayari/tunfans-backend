@@ -37,7 +37,7 @@ const userSchema = new mongoose.Schema({
   role: {
     type: String,
     default: "user",
-    enum: ["user", "admin"],
+    enum: ["user", "admin", "creator"],
   },
   createdAt: {
     type: Date,
@@ -59,6 +59,52 @@ const userSchema = new mongoose.Schema({
   },
   statusUpdatedAt: {
     type: Date,
+  },
+  // Subscription-related fields
+  subscriptionPrice: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+  payoutMethods: [
+    {
+      type: {
+        type: String,
+        enum: ["paypal", "bank_account", "stripe_connect"],
+        required: true,
+      },
+      accountDetails: {
+        // For PayPal
+        paypalEmail: String,
+        // For Bank Account
+        accountNumber: String,
+        routingNumber: String,
+        accountHolderName: String,
+        bankName: String,
+        // For Stripe Connect
+        stripeAccountId: String,
+      },
+      isDefault: {
+        type: Boolean,
+        default: false,
+      },
+      isVerified: {
+        type: Boolean,
+        default: false,
+      },
+      createdAt: {
+        type: Date,
+        default: Date.now,
+      },
+    },
+  ],
+  totalEarnings: {
+    type: Number,
+    default: 0,
+  },
+  availableBalance: {
+    type: Number,
+    default: 0,
   },
 });
 

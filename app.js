@@ -1,4 +1,6 @@
 const express = require("express");
+const http = require("http");
+const socketIo = require("socket.io");
 const path = require("path");
 const cookieParser = require("cookie-parser");
 const logger = require("morgan");
@@ -9,9 +11,25 @@ const connectDB = require("./conn");
 var authRouter = require("./middleware/authRoutes");
 const userRouter = require("./routes/user");
 const adminRouter = require("./routes/admin");
+const chatRouter = require("./routes/chat");
+const SocketService = require("./services/socketService");
 
 dotenv.config();
 const app = express();
+const server = http.createServer(app);
+
+// Socket.IO setup with CORS
+const io = socketIo(server, {
+  cors: {
+    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+});
+
+// Initialize Socket service
+const socketService = new SocketService(io);
+
 app.use(cors());
 app.use(logger("dev"));
 app.use(compression());
@@ -24,6 +42,7 @@ app.use(cookieParser());
 app.use("/api/auth", authRouter);
 app.use("/api/users", userRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/chat", chatRouter);
 
 app.use(
   express.static(path.join(__dirname, "public", "build"), {
@@ -186,8 +205,12 @@ app.use((err, req, res, next) => {
 
 connectDB();
 const port = process.env.PORT || 5000;
-app.listen(port, () => {
+server.listen(port, () => {
   console.log(`Server is running on port ${port}`);
+  console.log(`Socket.IO server is ready`);
 });
 
-module.exports = app;
+// Make socket service available globally if needed
+app.set("socketService", socketService);
+
+module.exports = { app, server, io, socketService };
