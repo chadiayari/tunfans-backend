@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/user_model");
+const Subscription = require("../models/subscription_model");
 const createError = require("http-errors");
 const { validationResult } = require("express-validator");
 
@@ -7,6 +8,36 @@ const generateToken = (id, role) => {
   return jwt.sign({ id, role }, process.env.JWT_SECRET, {
     expiresIn: "7d",
   });
+};
+
+// Helper function to get real-time subscriber count
+const getSubscriberCount = async (userId) => {
+  try {
+    const count = await Subscription.countDocuments({
+      creator: userId,
+      status: "active",
+      endDate: { $gt: new Date() }, // Not expired
+    });
+    return count;
+  } catch (error) {
+    console.error("Error getting subscriber count:", error);
+    return 0;
+  }
+};
+
+// Helper function to get real-time subscription count (how many creators the user is subscribed to)
+const getSubscriptionCount = async (userId) => {
+  try {
+    const count = await Subscription.countDocuments({
+      subscriber: userId,
+      status: "active",
+      endDate: { $gt: new Date() }, // Not expired
+    });
+    return count;
+  } catch (error) {
+    console.error("Error getting subscription count:", error);
+    return 0;
+  }
 };
 
 const registerUser = async (req, res, next) => {
@@ -109,6 +140,10 @@ const getUserProfile = async (req, res, next) => {
       return next(createError(404, "User not found"));
     }
 
+    // Get real-time counts
+    const subscriberCount = await getSubscriberCount(user._id);
+    const subscriptionCount = await getSubscriptionCount(user._id);
+
     res.json({
       success: true,
       user: {
@@ -122,6 +157,8 @@ const getUserProfile = async (req, res, next) => {
         coverImage: user.coverImage,
         bio: user.bio,
         subscriptionPrice: user.subscriptionPrice,
+        subscriberCount,
+        subscriptionCount,
         createdAt: user.createdAt,
         isActive: user.isActive,
       },
@@ -589,6 +626,10 @@ const getUserByUsername = async (req, res, next) => {
       return next(createError(404, "User not found"));
     }
 
+    // Get real-time counts
+    const subscriberCount = await getSubscriberCount(user._id);
+    const subscriptionCount = await getSubscriptionCount(user._id);
+
     // Return public profile information
     res.json({
       success: true,
@@ -600,8 +641,8 @@ const getUserByUsername = async (req, res, next) => {
         profileImage: user.profileImage,
         coverImage: user.coverImage,
         subscriptionPrice: user.subscriptionPrice,
-        subscriberCount: user.subscriberCount,
-        subscriptionCount: user.subscriptionCount,
+        subscriberCount,
+        subscriptionCount,
         role: user.role,
         createdAt: user.createdAt,
         // Only show email if it's the current user or an admin
@@ -629,6 +670,10 @@ const getCurrentUser = async (req, res, next) => {
       return next(createError(404, "User not found"));
     }
 
+    // Get real-time counts
+    const subscriberCount = await getSubscriberCount(user._id);
+    const subscriptionCount = await getSubscriptionCount(user._id);
+
     res.json({
       success: true,
       user: {
@@ -640,8 +685,8 @@ const getCurrentUser = async (req, res, next) => {
         profileImage: user.profileImage,
         coverImage: user.coverImage,
         subscriptionPrice: user.subscriptionPrice,
-        subscriberCount: user.subscriberCount,
-        subscriptionCount: user.subscriptionCount,
+        subscriberCount,
+        subscriptionCount,
         totalEarnings: user.totalEarnings,
         availableBalance: user.availableBalance,
         role: user.role,
@@ -669,6 +714,237 @@ const getCurrentUser = async (req, res, next) => {
   }
 };
 
+// Get featured creators based on subscriber count
+const getFeaturedCreators = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 10, minSubscribers = 0 } = req.query;
+
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Get all active creators who have at least one subscription or content
+    const creators = await User.find({
+      isActive: true,
+      role: { $in: ["user", "creator"] }, // Both users and creators can create content
+      subscriptionPrice: { $gt: 0 }, // Only users who have set a subscription price
+    })
+      .select("-password -payoutMethods -totalEarnings -availableBalance")
+      .lean();
+
+    // Get subscriber counts for all creators
+    const creatorsWithCounts = await Promise.all(
+      creators.map(async (creator) => {
+        const subscriberCount = await getSubscriberCount(creator._id);
+        const subscriptionCount = await getSubscriptionCount(creator._id);
+
+        return {
+          ...creator,
+          subscriberCount,
+          subscriptionCount,
+        };
+      })
+    );
+
+    // Filter creators with minimum subscriber count
+    const filteredCreators = creatorsWithCounts.filter(
+      (creator) => creator.subscriberCount >= parseInt(minSubscribers)
+    );
+
+    // Sort by subscriber count (descending) and creation date
+    filteredCreators.sort((a, b) => {
+      if (b.subscriberCount !== a.subscriberCount) {
+        return b.subscriberCount - a.subscriberCount;
+      }
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+
+    // Apply pagination
+    const totalCount = filteredCreators.length;
+    const paginatedCreators = filteredCreators.slice(skip, skip + limitNum);
+
+    // Format creators for response
+    const formattedCreators = paginatedCreators.map((creator) => ({
+      _id: creator._id,
+      username: creator.username,
+      firstName: creator.firstName,
+      lastName: creator.lastName,
+      profileImage: creator.profileImage,
+      coverImage: creator.coverImage,
+      bio: creator.bio,
+      subscriptionPrice: creator.subscriptionPrice,
+      subscriberCount: creator.subscriberCount,
+      subscriptionCount: creator.subscriptionCount,
+      role: creator.role,
+      createdAt: creator.createdAt,
+      // Add featured rank based on position
+      featuredRank: skip + paginatedCreators.indexOf(creator) + 1,
+    }));
+
+    const totalPages = Math.ceil(totalCount / limitNum);
+
+    res.json({
+      success: true,
+      creators: formattedCreators,
+      pagination: {
+        currentPage: pageNum,
+        totalPages,
+        totalCount,
+        limit: limitNum,
+        hasNext: pageNum < totalPages,
+        hasPrev: pageNum > 1,
+      },
+      filters: {
+        minSubscribers: parseInt(minSubscribers),
+      },
+    });
+  } catch (error) {
+    console.error("Get featured creators error:", error);
+    next(error);
+  }
+};
+
+// Get trending creators (most new subscribers in the last 30 days)
+const getTrendingCreators = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 10 } = req.query;
+
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Get date 30 days ago
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    // Aggregate subscriptions from the last 30 days
+    const trendingData = await Subscription.aggregate([
+      {
+        $match: {
+          status: "active",
+          startDate: { $gte: thirtyDaysAgo },
+        },
+      },
+      {
+        $group: {
+          _id: "$creator",
+          recentSubscribers: { $sum: 1 },
+        },
+      },
+      {
+        $sort: { recentSubscribers: -1 },
+      },
+      {
+        $skip: skip,
+      },
+      {
+        $limit: limitNum,
+      },
+    ]);
+
+    // Get creator details
+    const creatorIds = trendingData.map((item) => item._id);
+
+    if (creatorIds.length === 0) {
+      return res.json({
+        success: true,
+        creators: [],
+        pagination: {
+          currentPage: pageNum,
+          totalPages: 0,
+          totalCount: 0,
+          limit: limitNum,
+          hasNext: false,
+          hasPrev: false,
+        },
+        period: "last_30_days",
+      });
+    }
+
+    const creators = await User.find({
+      _id: { $in: creatorIds },
+      isActive: true,
+    })
+      .select("-password -payoutMethods -totalEarnings -availableBalance")
+      .lean();
+
+    // Combine creator data with trending data
+    const trendingCreators = await Promise.all(
+      creators.map(async (creator) => {
+        const trendingInfo = trendingData.find(
+          (item) => item._id.toString() === creator._id.toString()
+        );
+        const totalSubscriberCount = await getSubscriberCount(creator._id);
+        const subscriptionCount = await getSubscriptionCount(creator._id);
+
+        return {
+          _id: creator._id,
+          username: creator.username,
+          firstName: creator.firstName,
+          lastName: creator.lastName,
+          profileImage: creator.profileImage,
+          coverImage: creator.coverImage,
+          bio: creator.bio,
+          subscriptionPrice: creator.subscriptionPrice,
+          subscriberCount: totalSubscriberCount,
+          subscriptionCount,
+          recentSubscribers: trendingInfo?.recentSubscribers || 0,
+          role: creator.role,
+          createdAt: creator.createdAt,
+          trendingRank:
+            trendingData.findIndex(
+              (item) => item._id.toString() === creator._id.toString()
+            ) +
+            1 +
+            skip,
+        };
+      })
+    );
+
+    // Sort by recent subscribers to maintain order
+    trendingCreators.sort((a, b) => b.recentSubscribers - a.recentSubscribers);
+
+    // Get total count for pagination
+    const totalTrendingCount = await Subscription.aggregate([
+      {
+        $match: {
+          status: "active",
+          startDate: { $gte: thirtyDaysAgo },
+        },
+      },
+      {
+        $group: {
+          _id: "$creator",
+          recentSubscribers: { $sum: 1 },
+        },
+      },
+      {
+        $count: "total",
+      },
+    ]);
+
+    const totalCount = totalTrendingCount[0]?.total || 0;
+    const totalPages = Math.ceil(totalCount / limitNum);
+
+    res.json({
+      success: true,
+      creators: trendingCreators,
+      pagination: {
+        currentPage: pageNum,
+        totalPages,
+        totalCount,
+        limit: limitNum,
+        hasNext: pageNum < totalPages,
+        hasPrev: pageNum > 1,
+      },
+      period: "last_30_days",
+    });
+  } catch (error) {
+    console.error("Get trending creators error:", error);
+    next(error);
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
@@ -683,4 +959,6 @@ module.exports = {
   searchUsers,
   getUserByUsername,
   getCurrentUser,
+  getFeaturedCreators,
+  getTrendingCreators,
 };

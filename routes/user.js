@@ -14,6 +14,8 @@ const {
   searchUsers,
   getUserByUsername,
   getCurrentUser,
+  getFeaturedCreators,
+  getTrendingCreators,
 } = require("../controllers/userController");
 const {
   uploadProfileImage,
@@ -41,6 +43,8 @@ const {
   subscriptionPriceValidation,
   payoutMethodValidation,
   searchUsersValidation,
+  featuredCreatorsValidation,
+  trendingCreatorsValidation,
 } = require("../validators/userValidators");
 const {
   createContentValidation,
@@ -265,6 +269,18 @@ router.put(
   userOrAdmin,
   subscriptionIdParamValidation,
   toggleAutoRenewal
+);
+
+// Public routes for discovery
+router.get(
+  "/discover/featured",
+  featuredCreatorsValidation,
+  getFeaturedCreators
+);
+router.get(
+  "/discover/trending",
+  trendingCreatorsValidation,
+  getTrendingCreators
 );
 
 // Public profile route - Get user by username

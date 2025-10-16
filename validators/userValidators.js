@@ -1,4 +1,4 @@
-const { body } = require("express-validator");
+const { body, query } = require("express-validator");
 
 const userRegistrationValidation = [
   body("username")
@@ -92,8 +92,6 @@ const payoutMethodValidation = [
     .withMessage("Stripe account ID is required"),
 ];
 
-const { query } = require("express-validator");
-
 const searchUsersValidation = [
   query("q")
     .trim()
@@ -116,6 +114,35 @@ const searchUsersValidation = [
     .withMessage("Filter must be one of: creators, verified, online"),
 ];
 
+const featuredCreatorsValidation = [
+  query("page")
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage("Page must be a positive integer"),
+
+  query("limit")
+    .optional()
+    .isInt({ min: 1, max: 50 })
+    .withMessage("Limit must be between 1 and 50"),
+
+  query("minSubscribers")
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage("Minimum subscribers must be a non-negative integer"),
+];
+
+const trendingCreatorsValidation = [
+  query("page")
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage("Page must be a positive integer"),
+
+  query("limit")
+    .optional()
+    .isInt({ min: 1, max: 50 })
+    .withMessage("Limit must be between 1 and 50"),
+];
+
 module.exports = {
   userRegistrationValidation,
   userLoginValidation,
@@ -123,4 +150,6 @@ module.exports = {
   subscriptionPriceValidation,
   payoutMethodValidation,
   searchUsersValidation,
+  featuredCreatorsValidation,
+  trendingCreatorsValidation,
 };

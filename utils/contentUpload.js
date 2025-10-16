@@ -86,7 +86,7 @@ const exclusiveContentUpload = multer({
   storage: memoryStorage,
   fileFilter: exclusiveContentFilter,
   limits: {
-    fileSize: 100 * 1024 * 1024, // 100MB limit for exclusive content
+    fileSize: 24 * 1024 * 1024, // 24MB limit for exclusive content
   },
 });
 
@@ -297,6 +297,56 @@ const processExclusiveContentUpload = async (req, res, next) => {
   }
 };
 
+// Process post media upload (for creating posts with media)
+const processPostMediaUpload = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "No media uploaded",
+      });
+    }
+
+    const uniqueFilename = generateUniqueFilename(req.file.originalname);
+    const userId = req.user._id;
+
+    // Determine content type
+    const contentType = req.file.mimetype.startsWith("video/")
+      ? "video"
+      : "image";
+
+    // Upload to private exclusive content folder
+    const result = await uploadToS3(
+      req.file.buffer,
+      uniqueFilename,
+      req.file.mimetype,
+      `exclusive-content/${userId}/${contentType}s`,
+      false // Private access for exclusive content
+    );
+
+    // Store result in request for next middleware
+    req.uploadResult = {
+      filename: uniqueFilename,
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+      url: result.url,
+      key: result.key,
+      contentType,
+      isPrivate: true,
+    };
+
+    next();
+  } catch (error) {
+    console.error("Error processing post media upload:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error uploading post media",
+      error: error.message,
+    });
+  }
+};
+
 // Process multiple exclusive content uploads
 const processMultipleExclusiveContentUpload = async (req, res) => {
   try {
@@ -413,12 +463,14 @@ module.exports = {
   uploadProfileImage: profileImageUpload.single("profileImage"),
   uploadCoverImage: profileImageUpload.single("coverImage"),
   uploadExclusiveContent: exclusiveContentUpload.single("content"),
+  uploadPostMedia: exclusiveContentUpload.single("media"), // For post creation with media
   uploadMultipleExclusiveContent: exclusiveContentUpload.array("content", 10),
 
   // Processing functions
   processProfileImageUpload,
   processCoverImageUpload,
   processExclusiveContentUpload,
+  processPostMediaUpload, // New function for post media
   processMultipleExclusiveContentUpload,
   getPrivateContentUrl,
 

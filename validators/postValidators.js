@@ -95,8 +95,21 @@ const postQueryValidation = [
     .withMessage("Author ID must be a valid MongoDB ID"),
 ];
 
+const createPostWithMediaValidation = [
+  body("title")
+    .trim()
+    .isLength({ min: 1, max: 200 })
+    .withMessage("Title must be between 1 and 200 characters"),
+
+  body("description")
+    .trim()
+    .isLength({ min: 1, max: 2000 })
+    .withMessage("Description must be between 1 and 2000 characters"),
+];
+
 module.exports = {
   createPostValidation,
   postIdValidation,
   postQueryValidation,
+  createPostWithMediaValidation,
 };
