@@ -64,8 +64,6 @@ const getMyPosts = async (req, res, next) => {
       tags: post.tags,
       likeCount: post.likes?.length || 0,
       commentCount: post.comments?.filter((c) => !c.isDeleted).length || 0,
-      viewCount: post.viewCount,
-      shareCount: post.shareCount,
       author: post.author,
       createdAt: post.createdAt,
       updatedAt: post.updatedAt,
@@ -140,8 +138,6 @@ const createPost = async (req, res, next) => {
         tags: post.tags,
         likeCount: 0,
         commentCount: 0,
-        viewCount: 0,
-        shareCount: 0,
         author: post.author,
         createdAt: post.createdAt,
         updatedAt: post.updatedAt,
@@ -151,94 +147,6 @@ const createPost = async (req, res, next) => {
     });
   } catch (error) {
     console.error("Create post error:", error);
-    next(error);
-  }
-};
-
-// Get all posts (feed)
-const getAllPosts = async (req, res, next) => {
-  try {
-    const { page = 1, limit = 10, authorId, visibility = "public" } = req.query;
-    const userId = req.user?._id;
-
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
-    const skip = (pageNum - 1) * limitNum;
-
-    // Build query
-    const query = {
-      isActive: true,
-      publishedAt: { $lte: new Date() }, // Only published posts
-    };
-
-    // Add author filter if provided
-    if (authorId) {
-      query.author = authorId;
-    }
-
-    // Add visibility filter
-    if (visibility === "public") {
-      query.visibility = "public";
-    } else if (visibility === "subscribers" && userId) {
-      // TODO: Check if user is subscribed to the author
-      query.$or = [
-        { visibility: "public" },
-        { visibility: "subscribers", author: userId }, // Own posts
-      ];
-    }
-
-    // Get total count for pagination
-    const totalCount = await Post.countDocuments(query);
-
-    // Get posts with author info
-    const posts = await Post.find(query)
-      .populate("author", "username firstName lastName profileImage")
-      .sort({ publishedAt: -1 })
-      .skip(skip)
-      .limit(limitNum)
-      .lean();
-
-    // Check if current user liked each post
-    const formattedPosts = posts.map((post) => {
-      const userLiked =
-        userId &&
-        post.likes?.some((like) => like.user.toString() === userId.toString());
-
-      return {
-        _id: post._id,
-        content: post.content,
-        images: post.images,
-        videos: post.videos,
-        visibility: post.visibility,
-        tags: post.tags,
-        likeCount: post.likes?.length || 0,
-        commentCount: post.comments?.filter((c) => !c.isDeleted).length || 0,
-        viewCount: post.viewCount,
-        shareCount: post.shareCount,
-        userLiked,
-        author: post.author,
-        createdAt: post.createdAt,
-        updatedAt: post.updatedAt,
-        publishedAt: post.publishedAt,
-      };
-    });
-
-    const totalPages = Math.ceil(totalCount / limitNum);
-
-    res.json({
-      success: true,
-      posts: formattedPosts,
-      pagination: {
-        currentPage: pageNum,
-        totalPages,
-        totalCount,
-        limit: limitNum,
-        hasNext: pageNum < totalPages,
-        hasPrev: pageNum > 1,
-      },
-    });
-  } catch (error) {
-    console.error("Get all posts error:", error);
     next(error);
   }
 };
@@ -385,8 +293,6 @@ const createPostWithMedia = async (req, res, next) => {
         visibility: post.visibility,
         likeCount: 0,
         commentCount: 0,
-        viewCount: 0,
-        shareCount: 0,
         author: post.author,
         createdAt: post.createdAt,
         updatedAt: post.updatedAt,
@@ -458,7 +364,7 @@ const getHomeFeed = async (req, res, next) => {
 
       const formattedPosts = await Promise.all(
         allPosts.map(async (post) => {
-          const userLiked = post.likes?.some(
+          const isLiked = post.likes?.some(
             (like) => like.user.toString() === userId.toString()
           );
           const subscriberCount = await getSubscriberCount(post.author._id);
@@ -475,9 +381,7 @@ const getHomeFeed = async (req, res, next) => {
             likeCount: post.likes?.length || 0,
             commentCount:
               post.comments?.filter((c) => !c.isDeleted).length || 0,
-            viewCount: post.viewCount,
-            shareCount: post.shareCount,
-            userLiked,
+            isLiked,
             author: {
               ...post.author,
               subscriberCount,
@@ -485,7 +389,6 @@ const getHomeFeed = async (req, res, next) => {
             createdAt: post.createdAt,
             updatedAt: post.updatedAt,
             publishedAt: post.publishedAt,
-            isSuggested: !isOwnPost && userPosts.length > 0, // Mark as suggested if not own post and user has posts
             isOwnPost,
           };
         })
@@ -540,7 +443,7 @@ const getHomeFeed = async (req, res, next) => {
     // Check if current user liked each post and format response
     const formattedPosts = await Promise.all(
       posts.map(async (post) => {
-        const userLiked = post.likes?.some(
+        const isLiked = post.likes?.some(
           (like) => like.user.toString() === userId.toString()
         );
         const subscriberCount = await getSubscriberCount(post.author._id);
@@ -556,9 +459,7 @@ const getHomeFeed = async (req, res, next) => {
           tags: post.tags,
           likeCount: post.likes?.length || 0,
           commentCount: post.comments?.filter((c) => !c.isDeleted).length || 0,
-          viewCount: post.viewCount,
-          shareCount: post.shareCount,
-          userLiked,
+          isLiked,
           author: {
             ...post.author,
             subscriberCount,
@@ -566,7 +467,6 @@ const getHomeFeed = async (req, res, next) => {
           createdAt: post.createdAt,
           updatedAt: post.updatedAt,
           publishedAt: post.publishedAt,
-          isSuggested: false,
           isOwnPost,
         };
       })
@@ -642,7 +542,7 @@ const getPostsByUsername = async (req, res, next) => {
     // Format posts with like status for requesting user
     const formattedPosts = await Promise.all(
       posts.map(async (post) => {
-        const userLiked = requestingUserId
+        const isLiked = requestingUserId
           ? post.likes?.some(
               (like) => like.user.toString() === requestingUserId.toString()
             )
@@ -658,9 +558,7 @@ const getPostsByUsername = async (req, res, next) => {
           tags: post.tags,
           likeCount: post.likes?.length || 0,
           commentCount: post.comments?.filter((c) => !c.isDeleted).length || 0,
-          viewCount: post.viewCount,
-          shareCount: post.shareCount,
-          userLiked,
+          isLiked,
           author: {
             ...post.author,
             subscriberCount,
@@ -695,7 +593,6 @@ const getPostsByUsername = async (req, res, next) => {
 module.exports = {
   getMyPosts,
   createPost,
-  getAllPosts,
   togglePostLike,
   deletePost,
   createPostWithMedia,

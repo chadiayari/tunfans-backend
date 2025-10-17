@@ -109,14 +109,6 @@ const postSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
-    viewCount: {
-      type: Number,
-      default: 0,
-    },
-    shareCount: {
-      type: Number,
-      default: 0,
-    },
     scheduledAt: {
       type: Date,
       default: null,

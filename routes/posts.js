@@ -3,7 +3,6 @@ const router = express.Router();
 const {
   getMyPosts,
   createPost,
-  getAllPosts,
   togglePostLike,
   deletePost,
   createPostWithMedia,
@@ -36,7 +35,6 @@ router.post(
   processPostMediaUpload,
   createPostWithMedia
 );
-router.get("/", getAllPosts); // Can be accessed by both authenticated and non-authenticated users
 router.post("/:postId/like", authenticate, postIdValidation, togglePostLike);
 router.delete("/:postId", authenticate, postIdValidation, deletePost);
 
