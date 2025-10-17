@@ -58,6 +58,41 @@ const getConversations = async (req, res, next) => {
   }
 };
 
+// Get total unread messages count for user
+const getUnreadMessagesCount = async (req, res, next) => {
+  try {
+    const { id: userId } = req.user;
+    const userRole = req.userRole;
+    const userModel = userRole === "admin" ? "Admin" : "User";
+
+    // Get all conversations for the user
+    const conversations = await Conversation.find({
+      "participants.user": userId,
+      "participants.userModel": userModel,
+      isActive: true,
+    });
+
+    // Calculate total unread count
+    let totalUnreadCount = 0;
+    for (const conversation of conversations) {
+      const currentUserParticipant = conversation.participants.find(
+        (p) => p.user.toString() === userId.toString()
+      );
+      if (currentUserParticipant) {
+        totalUnreadCount += currentUserParticipant.unreadCount || 0;
+      }
+    }
+
+    res.json({
+      success: true,
+      unreadCount: totalUnreadCount,
+    });
+  } catch (error) {
+    console.error("Get unread messages count error:", error);
+    next(error);
+  }
+};
+
 // Get messages in a conversation
 const getMessages = async (req, res, next) => {
   try {
@@ -342,6 +377,7 @@ const getOrCreateConversation = async (req, res, next) => {
 
 module.exports = {
   getConversations,
+  getUnreadMessagesCount,
   getMessages,
   sendMessage,
   startConversation,

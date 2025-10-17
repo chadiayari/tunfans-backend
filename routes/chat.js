@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const {
   getConversations,
+  getUnreadMessagesCount,
   getMessages,
   sendMessage,
   startConversation,
@@ -14,6 +15,9 @@ router.use(authenticate);
 
 // Get all conversations for the authenticated user
 router.get("/conversations", getConversations);
+
+// Get total unread messages count
+router.get("/unread-count", getUnreadMessagesCount);
 
 // Get messages in a specific conversation
 router.get("/conversations/:conversationId/messages", getMessages);

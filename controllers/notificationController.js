@@ -266,7 +266,7 @@ const getNotificationStats = async (req, res, next) => {
 
     const stats = await Notification.aggregate([
       {
-        $match: { recipient: mongoose.Types.ObjectId(userId) },
+        $match: { recipient: new mongoose.Types.ObjectId(userId) },
       },
       {
         $group: {
