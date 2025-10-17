@@ -2,6 +2,7 @@ const Subscription = require("../models/subscription_model");
 const User = require("../models/user_model");
 const createError = require("http-errors");
 const { validationResult } = require("express-validator");
+const NotificationService = require("../services/notificationService");
 
 // Subscribe to a creator
 const subscribeToCreator = async (req, res, next) => {
@@ -62,6 +63,19 @@ const subscribeToCreator = async (req, res, next) => {
     });
 
     await subscription.save();
+    
+    // Create notification for new subscription
+    try {
+      await NotificationService.createSubscriptionNotification(
+        subscriberId,
+        creatorId,
+        subscription._id
+      );
+    } catch (notificationError) {
+      console.error("Error creating subscription notification:", notificationError);
+      // Don't fail the subscription operation if notification fails
+    }
+    
     await subscription.populate(
       "creator",
       "username firstName lastName profileImage subscriptionPrice"

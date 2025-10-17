@@ -3,17 +3,24 @@ const router = express.Router();
 const {
   getMyPosts,
   createPost,
+  getAllPosts,
   togglePostLike,
   deletePost,
   createPostWithMedia,
   getHomeFeed,
   getPostsByUsername,
+  addComment,
+  getPostComments,
+  deleteComment,
 } = require("../controllers/postController");
 const { authenticate, userOrAdmin } = require("../middleware/authMiddleware");
 const {
   createPostValidation,
   postIdValidation,
   createPostWithMediaValidation,
+  addCommentValidation,
+  commentIdValidation,
+  getCommentsValidation,
 } = require("../validators/postValidators");
 const {
   uploadPostMedia,
@@ -37,5 +44,20 @@ router.post(
 );
 router.post("/:postId/like", authenticate, postIdValidation, togglePostLike);
 router.delete("/:postId", authenticate, postIdValidation, deletePost);
+
+// Comment routes
+router.post(
+  "/:postId/comments",
+  authenticate,
+  addCommentValidation,
+  addComment
+);
+router.get("/:postId/comments", getCommentsValidation, getPostComments);
+router.delete(
+  "/:postId/comments/:commentId",
+  authenticate,
+  commentIdValidation,
+  deleteComment
+);
 
 module.exports = router;

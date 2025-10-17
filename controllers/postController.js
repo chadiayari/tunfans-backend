@@ -3,6 +3,7 @@ const User = require("../models/user_model");
 const Subscription = require("../models/subscription_model");
 const createError = require("http-errors");
 const { validationResult } = require("express-validator");
+const NotificationService = require("../services/notificationService");
 
 // Helper function to get real-time subscriber count
 const getSubscriberCount = async (userId) => {
@@ -176,6 +177,18 @@ const togglePostLike = async (req, res, next) => {
       // Like the post
       post.likes.push({ user: userId });
       isLiked = true;
+
+      // Create notification for post like (only when liking, not unliking)
+      try {
+        await NotificationService.createPostLikeNotification(
+          userId,
+          post.author,
+          postId
+        );
+      } catch (notificationError) {
+        console.error("Error creating like notification:", notificationError);
+        // Don't fail the like operation if notification fails
+      }
     }
 
     await post.save();
@@ -499,12 +512,12 @@ const getPostsByUsername = async (req, res, next) => {
   try {
     const { username } = req.params;
     const { page = 1, limit = 10 } = req.query;
-    const requestingUserId = req.user ? req.user._id : null;
 
     // Find user by username
     const user = await User.findOne({ username, isActive: true }).select(
       "_id username firstName lastName profileImage bio subscriptionPrice"
     );
+    const requestingUserId = user._id ? user._id : null;
 
     if (!user) {
       return next(createError(404, "User not found"));
@@ -590,6 +603,170 @@ const getPostsByUsername = async (req, res, next) => {
   }
 };
 
+// Add comment to a post
+const addComment = async (req, res, next) => {
+  try {
+    const { postId } = req.params;
+    const { content } = req.body;
+    const userId = req.user._id;
+
+    if (!content || content.trim().length === 0) {
+      return next(createError(400, "Comment content is required"));
+    }
+
+    const post = await Post.findById(postId);
+    if (!post) {
+      return next(createError(404, "Post not found"));
+    }
+
+    // Create new comment
+    const newComment = {
+      user: userId,
+      content: content.trim(),
+      createdAt: new Date(),
+      isDeleted: false,
+    };
+
+    post.comments.push(newComment);
+    await post.save();
+
+    // Create notification for post comment
+    try {
+      await NotificationService.createPostCommentNotification(
+        userId,
+        post.author,
+        postId,
+        content.trim()
+      );
+    } catch (notificationError) {
+      console.error("Error creating comment notification:", notificationError);
+      // Don't fail the comment operation if notification fails
+    }
+
+    // Populate the new comment with user info
+    await post.populate({
+      path: "comments.user",
+      select: "username firstName lastName profileImage",
+    });
+
+    // Get the newly added comment
+    const addedComment = post.comments[post.comments.length - 1];
+
+    res.status(201).json({
+      success: true,
+      message: "Comment added successfully",
+      comment: {
+        _id: addedComment._id,
+        content: addedComment.content,
+        user: addedComment.user,
+        createdAt: addedComment.createdAt,
+        isDeleted: addedComment.isDeleted,
+      },
+      totalComments: post.comments.filter((c) => !c.isDeleted).length,
+    });
+  } catch (error) {
+    console.error("Add comment error:", error);
+    next(error);
+  }
+};
+
+// Get all comments for a post
+const getPostComments = async (req, res, next) => {
+  try {
+    const { postId } = req.params;
+    const { page = 1, limit = 20 } = req.query;
+
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const post = await Post.findById(postId)
+      .populate({
+        path: "comments.user",
+        select: "username firstName lastName profileImage",
+      })
+      .lean();
+
+    if (!post) {
+      return next(createError(404, "Post not found"));
+    }
+
+    // Filter out deleted comments and sort by creation date
+    const activeComments = post.comments
+      .filter((comment) => !comment.isDeleted)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    const totalComments = activeComments.length;
+    const paginatedComments = activeComments.slice(skip, skip + limitNum);
+
+    res.json({
+      success: true,
+      comments: paginatedComments.map((comment) => ({
+        _id: comment._id,
+        content: comment.content,
+        user: comment.user,
+        createdAt: comment.createdAt,
+      })),
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: totalComments,
+        pages: Math.ceil(totalComments / limitNum),
+      },
+    });
+  } catch (error) {
+    console.error("Get post comments error:", error);
+    next(error);
+  }
+};
+
+// Delete a comment
+const deleteComment = async (req, res, next) => {
+  try {
+    const { postId, commentId } = req.params;
+    const userId = req.user._id;
+
+    const post = await Post.findById(postId);
+    if (!post) {
+      return next(createError(404, "Post not found"));
+    }
+
+    const comment = post.comments.id(commentId);
+    if (!comment) {
+      return next(createError(404, "Comment not found"));
+    }
+
+    if (comment.isDeleted) {
+      return next(createError(404, "Comment not found"));
+    }
+
+    // Check if user owns the comment or the post
+    const isCommentOwner = comment.user.toString() === userId.toString();
+    const isPostOwner = post.author.toString() === userId.toString();
+
+    if (!isCommentOwner && !isPostOwner) {
+      return next(
+        createError(403, "You don't have permission to delete this comment")
+      );
+    }
+
+    // Soft delete the comment
+    comment.isDeleted = true;
+    comment.deletedAt = new Date();
+
+    await post.save();
+
+    res.json({
+      success: true,
+      message: "Comment deleted successfully",
+      totalComments: post.comments.filter((c) => !c.isDeleted).length,
+    });
+  } catch (error) {
+    console.error("Delete comment error:", error);
+    next(error);
+  }
+};
+
 module.exports = {
   getMyPosts,
   createPost,
@@ -598,4 +775,7 @@ module.exports = {
   createPostWithMedia,
   getHomeFeed,
   getPostsByUsername,
+  addComment,
+  getPostComments,
+  deleteComment,
 };

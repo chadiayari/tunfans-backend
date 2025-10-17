@@ -62,15 +62,6 @@ const contentSchema = new mongoose.Schema(
     scheduledFor: {
       type: Date,
     },
-    // Content settings - all content is subscription-only by default
-    allowComments: {
-      type: Boolean,
-      default: true,
-    },
-    allowLikes: {
-      type: Boolean,
-      default: true,
-    },
   },
   {
     timestamps: true,

@@ -26,6 +26,7 @@ const notificationSchema = new mongoose.Schema(
         "subscription",
         "subscription_expired",
         "post_like",
+        "post_comment",
         "content_like",
         "new_content",
         "new_post",

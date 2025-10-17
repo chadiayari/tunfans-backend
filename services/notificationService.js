@@ -133,6 +133,41 @@ class NotificationService {
     }
   }
 
+  // Create a post comment notification
+  static async createPostCommentNotification(commenterId, postAuthorId, postId, commentContent) {
+    try {
+      const User = require("../models/user_model");
+      const commenter = await User.findById(commenterId).select(
+        "username firstName lastName"
+      );
+
+      if (!commenter || commenterId.toString() === postAuthorId.toString()) return null;
+
+      // Truncate comment content for notification
+      const truncatedContent = commentContent.length > 50 
+        ? commentContent.substring(0, 50) + "..." 
+        : commentContent;
+
+      return await Notification.createNotification({
+        recipient: postAuthorId,
+        sender: commenterId,
+        senderModel: "User",
+        type: "post_comment",
+        title: "New Comment",
+        message: `${commenter.firstName || commenter.username} commented: "${truncatedContent}"`,
+        data: {
+          postId,
+          commentId: null, // Will be set by the caller if needed
+        },
+        actionUrl: `/posts/${postId}`,
+        priority: "normal",
+      });
+    } catch (error) {
+      console.error("Error creating post comment notification:", error);
+      return null;
+    }
+  }
+
   // Create a content like notification
   static async createContentLikeNotification(
     likerId,

@@ -97,9 +97,40 @@ const createPostWithMediaValidation = [
     .withMessage("Description must be between 1 and 2000 characters"),
 ];
 
+const addCommentValidation = [
+  param("postId").isMongoId().withMessage("Invalid post ID"),
+
+  body("content")
+    .trim()
+    .isLength({ min: 1, max: 1000 })
+    .withMessage("Comment content must be between 1 and 1000 characters"),
+];
+
+const commentIdValidation = [
+  param("postId").isMongoId().withMessage("Invalid post ID"),
+  param("commentId").isMongoId().withMessage("Invalid comment ID"),
+];
+
+const getCommentsValidation = [
+  param("postId").isMongoId().withMessage("Invalid post ID"),
+
+  query("page")
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage("Page must be a positive integer"),
+
+  query("limit")
+    .optional()
+    .isInt({ min: 1, max: 100 })
+    .withMessage("Limit must be between 1 and 100"),
+];
+
 module.exports = {
   createPostValidation,
   postIdValidation,
   postQueryValidation,
   createPostWithMediaValidation,
+  addCommentValidation,
+  commentIdValidation,
+  getCommentsValidation,
 };
