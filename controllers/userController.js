@@ -359,7 +359,6 @@ const addPayoutMethod = async (req, res, next) => {
       type,
       accountDetails,
       isDefault: isFirstMethod,
-      isVerified: false, // Will be verified through external service
     };
 
     user.payoutMethods.push(newPayoutMethod);
@@ -375,9 +374,7 @@ const addPayoutMethod = async (req, res, next) => {
         _id: addedMethod._id,
         type: addedMethod.type,
         isDefault: addedMethod.isDefault,
-        isVerified: addedMethod.isVerified,
         createdAt: addedMethod.createdAt,
-        // Only return safe account details (masked sensitive info)
         accountDetails: maskAccountDetails(
           addedMethod.type,
           addedMethod.accountDetails
@@ -405,7 +402,6 @@ const getPayoutMethods = async (req, res, next) => {
       _id: method._id,
       type: method.type,
       isDefault: method.isDefault,
-      isVerified: method.isVerified,
       createdAt: method.createdAt,
       accountDetails: maskAccountDetails(method.type, method.accountDetails),
     }));
@@ -601,8 +597,6 @@ const searchUsers = async (req, res, next) => {
         case "creators":
           searchCriteria.subscriptionPrice = { $gt: 0 };
           break;
-        case "verified":
-          searchCriteria.isVerified = true;
           break;
         case "online":
           // Add online status filter if you have this field
@@ -766,7 +760,6 @@ const getCurrentUser = async (req, res, next) => {
               _id: method._id,
               type: method.type,
               isDefault: method.isDefault,
-              isVerified: method.isVerified,
               createdAt: method.createdAt,
               accountDetails: maskAccountDetails(
                 method.type,
