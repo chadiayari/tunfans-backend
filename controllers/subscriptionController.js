@@ -103,8 +103,18 @@ const subscribeToCreator = async (req, res, next) => {
 // Unsubscribe from a creator
 const unsubscribeFromCreator = async (req, res, next) => {
   try {
-    const { creatorId } = req.params;
+    const { username } = req.params;
     const subscriberId = req.user._id;
+
+    // Find creator by username
+    const creator = await User.findOne({ username, isActive: true }).select(
+      "_id"
+    );
+    if (!creator) {
+      return next(createError(404, "Creator not found"));
+    }
+
+    const creatorId = creator._id;
 
     const subscription = await Subscription.findActiveSubscription(
       subscriberId,
@@ -277,8 +287,18 @@ const getMySubscribers = async (req, res, next) => {
 // Check subscription status
 const checkSubscriptionStatus = async (req, res, next) => {
   try {
-    const { creatorId } = req.params;
+    const { username } = req.params;
     const subscriberId = req.user._id;
+
+    // Find creator by username
+    const creator = await User.findOne({ username, isActive: true }).select(
+      "_id"
+    );
+    if (!creator) {
+      return next(createError(404, "Creator not found"));
+    }
+
+    const creatorId = creator._id;
 
     const subscription = await Subscription.findOne({
       subscriber: subscriberId,

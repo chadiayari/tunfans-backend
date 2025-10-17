@@ -594,6 +594,104 @@ const getHomeFeed = async (req, res, next) => {
   }
 };
 
+// Get posts by username
+const getPostsByUsername = async (req, res, next) => {
+  try {
+    const { username } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+    const requestingUserId = req.user ? req.user._id : null;
+
+    // Find user by username
+    const user = await User.findOne({ username, isActive: true }).select(
+      "_id username firstName lastName profileImage bio subscriptionPrice"
+    );
+
+    if (!user) {
+      return next(createError(404, "User not found"));
+    }
+
+    const userId = user._id;
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Get posts by this user
+    const posts = await Post.find({
+      author: userId,
+      isActive: true,
+      publishedAt: { $lte: new Date() },
+    })
+      .populate(
+        "author",
+        "username firstName lastName profileImage subscriptionPrice"
+      )
+      .sort({ publishedAt: -1 })
+      .skip(skip)
+      .limit(limitNum)
+      .lean();
+
+    const totalPosts = await Post.countDocuments({
+      author: userId,
+      isActive: true,
+      publishedAt: { $lte: new Date() },
+    });
+
+    // Get subscriber count for the user
+    const subscriberCount = await getSubscriberCount(userId);
+
+    // Format posts with like status for requesting user
+    const formattedPosts = await Promise.all(
+      posts.map(async (post) => {
+        const userLiked = requestingUserId
+          ? post.likes?.some(
+              (like) => like.user.toString() === requestingUserId.toString()
+            )
+          : false;
+
+        return {
+          _id: post._id,
+          title: post.title,
+          content: post.content,
+          images: post.images,
+          videos: post.videos,
+          visibility: post.visibility,
+          tags: post.tags,
+          likeCount: post.likes?.length || 0,
+          commentCount: post.comments?.filter((c) => !c.isDeleted).length || 0,
+          viewCount: post.viewCount,
+          shareCount: post.shareCount,
+          userLiked,
+          author: {
+            ...post.author,
+            subscriberCount,
+          },
+          createdAt: post.createdAt,
+          updatedAt: post.updatedAt,
+          publishedAt: post.publishedAt,
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      user: {
+        ...user.toObject(),
+        subscriberCount,
+      },
+      posts: formattedPosts,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: totalPosts,
+        pages: Math.ceil(totalPosts / limitNum),
+      },
+    });
+  } catch (error) {
+    console.error("Get posts by username error:", error);
+    next(error);
+  }
+};
+
 module.exports = {
   getMyPosts,
   createPost,
@@ -602,4 +700,5 @@ module.exports = {
   deletePost,
   createPostWithMedia,
   getHomeFeed,
+  getPostsByUsername,
 };

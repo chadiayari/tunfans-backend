@@ -11,37 +11,6 @@ const createContentValidation = [
     .trim()
     .isLength({ max: 1000 })
     .withMessage("Description must not exceed 1000 characters"),
-
-  body("price")
-    .optional()
-    .isFloat({ min: 0 })
-    .withMessage("Price must be a positive number"),
-
-  body("tags")
-    .optional()
-    .custom((value) => {
-      if (typeof value === "string") {
-        try {
-          const parsed = JSON.parse(value);
-          if (!Array.isArray(parsed)) {
-            throw new Error("Tags must be an array");
-          }
-        } catch (e) {
-          // If not JSON, check if it's comma-separated
-          if (!value.includes(",") && value.length > 50) {
-            throw new Error("Tags string is too long");
-          }
-        }
-      } else if (!Array.isArray(value)) {
-        throw new Error("Tags must be an array or comma-separated string");
-      }
-      return true;
-    }),
-
-  body("isSubscriberOnly")
-    .optional()
-    .isBoolean()
-    .withMessage("isSubscriberOnly must be a boolean value"),
 ];
 
 const updateContentValidation = [
@@ -58,37 +27,6 @@ const updateContentValidation = [
     .trim()
     .isLength({ max: 1000 })
     .withMessage("Description must not exceed 1000 characters"),
-
-  body("price")
-    .optional()
-    .isFloat({ min: 0 })
-    .withMessage("Price must be a positive number"),
-
-  body("tags")
-    .optional()
-    .custom((value) => {
-      if (typeof value === "string") {
-        try {
-          const parsed = JSON.parse(value);
-          if (!Array.isArray(parsed)) {
-            throw new Error("Tags must be an array");
-          }
-        } catch (e) {
-          // If not JSON, check if it's comma-separated
-          if (!value.includes(",") && value.length > 50) {
-            throw new Error("Tags string is too long");
-          }
-        }
-      } else if (!Array.isArray(value)) {
-        throw new Error("Tags must be an array or comma-separated string");
-      }
-      return true;
-    }),
-
-  body("isSubscriberOnly")
-    .optional()
-    .isBoolean()
-    .withMessage("isSubscriberOnly must be a boolean value"),
 
   body("status")
     .optional()

@@ -39,20 +39,6 @@ const contentSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
-    // All content is now exclusive/private by default
-    // Pricing for individual content access
-    price: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-    // Tags for content organization
-    tags: [
-      {
-        type: String,
-        trim: true,
-      },
-    ],
     // Content statistics
     views: {
       type: Number,
@@ -76,11 +62,7 @@ const contentSchema = new mongoose.Schema(
     scheduledFor: {
       type: Date,
     },
-    // Content settings
-    isSubscriberOnly: {
-      type: Boolean,
-      default: true,
-    },
+    // Content settings - all content is subscription-only by default
     allowComments: {
       type: Boolean,
       default: true,
@@ -97,10 +79,8 @@ const contentSchema = new mongoose.Schema(
 
 // Indexes for efficient queries
 contentSchema.index({ creator: 1, createdAt: -1 });
-contentSchema.index({ contentType: 1 });
 contentSchema.index({ status: 1 });
 contentSchema.index({ publishedAt: -1 });
-contentSchema.index({ tags: 1 });
 
 // Virtual for content URL (will generate signed URL when accessed)
 contentSchema.virtual("accessUrl").get(function () {
@@ -125,10 +105,6 @@ contentSchema.statics.findByCreator = function (creatorId, options = {}) {
 
   if (options.status) {
     query.status = options.status;
-  }
-
-  if (options.contentType) {
-    query.contentType = options.contentType;
   }
 
   return this.find(query)

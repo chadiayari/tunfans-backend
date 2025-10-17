@@ -18,11 +18,7 @@ const {
   getTrendingCreators,
 } = require("../controllers/userController");
 const {
-  uploadProfileImage,
   createContent,
-  getMyContent,
-  getUserContent,
-  getContentByCreator,
   updateExclusiveContent,
   deleteExclusiveContent,
   toggleContentLike,
@@ -120,8 +116,23 @@ router.post(
   userOrAdmin,
   uploadProfileImageMiddleware,
   processProfileImageUpload,
-  uploadProfileImage,
+  userUploadProfileImage,
   handleUploadError
+);
+
+router.put(
+  "/content/:contentId",
+  authenticate,
+  userOrAdmin,
+  updateContentValidation,
+  updateExclusiveContent
+);
+router.delete(
+  "/content/:contentId",
+  authenticate,
+  userOrAdmin,
+  contentIdValidation,
+  deleteExclusiveContent
 );
 
 router.post(
@@ -142,41 +153,6 @@ router.post(
   uploadMultipleExclusiveContent,
   processMultipleExclusiveContentUpload,
   handleUploadError
-);
-
-// Content management routes
-router.get("/content", authenticate, userOrAdmin, getMyContent);
-router.get("/:username/content", authenticate, userOrAdmin, getUserContent);
-router.put(
-  "/content/:contentId",
-  authenticate,
-  userOrAdmin,
-  updateContentValidation,
-  updateExclusiveContent
-);
-router.delete(
-  "/content/:contentId",
-  authenticate,
-  userOrAdmin,
-  contentIdValidation,
-  deleteExclusiveContent
-);
-router.post(
-  "/content/:contentId/like",
-  authenticate,
-  userOrAdmin,
-  contentIdValidation,
-  toggleContentLike
-);
-
-// Public content routes (for viewing other creators) - requires subscription
-router.get(
-  "/creators/:creatorId/content",
-  authenticate,
-  userOrAdmin,
-  checkSubscriptionAccess,
-  creatorIdValidation,
-  getContentByCreator
 );
 
 // Private content access URL generation
@@ -221,7 +197,7 @@ router.post(
 );
 
 router.delete(
-  "/unsubscribe/:creatorId",
+  "/unsubscribe/:username",
   authenticate,
   userOrAdmin,
   creatorIdParamValidation,
@@ -245,7 +221,7 @@ router.get(
 );
 
 router.get(
-  "/subscription-status/:creatorId",
+  "/subscription-status/:username",
   authenticate,
   userOrAdmin,
   creatorIdParamValidation,
@@ -271,9 +247,5 @@ router.get(
   trendingCreatorsValidation,
   getTrendingCreators
 );
-
-// Public profile route - Get user by username
-// Note: This should be at the end to avoid conflicts with other routes
-router.get("/:username", getUserByUsername);
 
 module.exports = router;

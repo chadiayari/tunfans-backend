@@ -192,8 +192,6 @@ const getUserProfile = async (req, res, next) => {
 
     // Check if current user is subscribed to this profile (only if user is authenticated)
     let isSubscribed = false;
-    console.log("req.user:", req.user);
-    console.log("user:", user);
     if (req.user && req.user._id.toString() !== user._id.toString()) {
       isSubscribed = await checkSubscriptionStatus(req.user._id, user._id);
     }

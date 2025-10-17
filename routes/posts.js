@@ -8,6 +8,7 @@ const {
   deletePost,
   createPostWithMedia,
   getHomeFeed,
+  getPostsByUsername,
 } = require("../controllers/postController");
 const { authenticate, userOrAdmin } = require("../middleware/authMiddleware");
 const {
@@ -24,6 +25,7 @@ const {
 // Protected routes (requires authentication)
 router.get("/home", authenticate, getHomeFeed);
 router.get("/my-posts", authenticate, getMyPosts);
+router.get("/user-posts/:username", getPostsByUsername); // Get posts by username (public)
 router.post("/", authenticate, createPostValidation, createPost);
 router.post(
   "/exclusive-content",
