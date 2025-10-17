@@ -181,7 +181,7 @@ router.get(
 
 // Private content access URL generation
 router.get(
-  "/content/access/:key",
+  "/content/access/*",
   authenticate,
   userOrAdmin,
   getPrivateContentUrl

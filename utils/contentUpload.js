@@ -404,16 +404,57 @@ const processMultipleExclusiveContentUpload = async (req, res) => {
 // Get signed URL for private content
 const getPrivateContentUrl = async (req, res) => {
   try {
-    const { key } = req.params;
+    // Get the full path after /content/access/
+    const key = req.params[0]; // This captures everything after the wildcard
     const userId = req.user._id;
 
-    // Verify that the user has access to this content
-    // (This should include subscription checks in a real app)
-    if (!key.includes(`exclusive-content/${userId}/`)) {
-      return res.status(403).json({
+    if (!key) {
+      return res.status(400).json({
         success: false,
-        message: "Access denied to this content",
+        message: "No content key provided",
       });
+    }
+
+    // More flexible access control - check if the key contains the user's ID
+    // This handles both formats: exclusive-content/userId/ and exclusive-content_userId_
+    const userIdString = userId.toString();
+    const hasAccess =
+      key.includes(`exclusive-content_${userIdString}_`) ||
+      key.includes(`exclusive-content/${userIdString}_images/`) ||
+      key.includes(`content_${userIdString}_`) ||
+      key.includes(`content/${userIdString}/`);
+
+    if (!hasAccess) {
+      // For content that doesn't belong to the user, check subscription access
+      // Extract creator ID from the key pattern
+      const creatorIdMatch = key.match(
+        /exclusive-content[_/]([a-f0-9]{24})[_/]/
+      );
+      if (creatorIdMatch) {
+        const creatorId = creatorIdMatch[1];
+
+        // Check if user has an active subscription to this creator
+        const Subscription = require("../models/subscription_model");
+        const subscription = await Subscription.findOne({
+          subscriber: userId,
+          creator: creatorId,
+          status: "active",
+          endDate: { $gt: new Date() },
+        });
+
+        if (!subscription) {
+          return res.status(403).json({
+            success: false,
+            message:
+              "Access denied. Subscription required to view this content.",
+          });
+        }
+      } else {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied to this content",
+        });
+      }
     }
 
     const signedUrl = await generateSignedUrl(key, 3600); // 1 hour expiry

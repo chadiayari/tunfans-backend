@@ -23,7 +23,7 @@ const getSubscriberCount = async (userId) => {
 const getMyPosts = async (req, res, next) => {
   try {
     const userId = req.user._id;
-    const { page = 1, limit = 10, visibility, isExclusive } = req.query;
+    const { page = 1, limit = 10, visibility } = req.query;
 
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
@@ -43,10 +43,6 @@ const getMyPosts = async (req, res, next) => {
       query.visibility = visibility;
     }
 
-    if (isExclusive !== undefined) {
-      query.isExclusive = isExclusive === "true";
-    }
-
     // Get total count for pagination
     const totalCount = await Post.countDocuments(query);
 
@@ -64,7 +60,6 @@ const getMyPosts = async (req, res, next) => {
       content: post.content,
       images: post.images,
       videos: post.videos,
-      isExclusive: post.isExclusive,
       visibility: post.visibility,
       tags: post.tags,
       likeCount: post.likes?.length || 0,
@@ -111,7 +106,6 @@ const createPost = async (req, res, next) => {
       content,
       images = [],
       videos = [],
-      isExclusive = false,
       visibility = "public",
       tags = [],
       scheduledAt = null,
@@ -125,7 +119,6 @@ const createPost = async (req, res, next) => {
       content,
       images,
       videos,
-      isExclusive,
       visibility,
       tags: tags.map((tag) => tag.toLowerCase().trim()),
       scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
@@ -143,7 +136,6 @@ const createPost = async (req, res, next) => {
         content: post.content,
         images: post.images,
         videos: post.videos,
-        isExclusive: post.isExclusive,
         visibility: post.visibility,
         tags: post.tags,
         likeCount: 0,
@@ -217,7 +209,6 @@ const getAllPosts = async (req, res, next) => {
         content: post.content,
         images: post.images,
         videos: post.videos,
-        isExclusive: post.isExclusive,
         visibility: post.visibility,
         tags: post.tags,
         likeCount: post.likes?.length || 0,
@@ -375,7 +366,6 @@ const createPostWithMedia = async (req, res, next) => {
       title, // Add title field to post model if needed
       images,
       videos,
-      isExclusive: true, // Exclusive content is always premium
       visibility: "subscribers", // Only subscribers can see exclusive content
       publishedAt: new Date(),
     });
@@ -392,7 +382,6 @@ const createPostWithMedia = async (req, res, next) => {
         content: post.content,
         images: post.images,
         videos: post.videos,
-        isExclusive: post.isExclusive,
         visibility: post.visibility,
         likeCount: 0,
         commentCount: 0,
@@ -430,10 +419,28 @@ const getHomeFeed = async (req, res, next) => {
     // Extract creator IDs
     const creatorIds = subscriptions.map((sub) => sub.creator);
 
-    // If no subscriptions, return empty feed with suggested public posts
+    // Add the current user's own ID to see their own posts
+    const allAuthorIds = [...creatorIds, userId];
+
+    // If no subscriptions, still show user's own posts
     if (creatorIds.length === 0) {
-      // Get some popular public posts as suggestions
+      // Get user's own posts
+      const userPosts = await Post.find({
+        author: userId,
+        isActive: true,
+        publishedAt: { $lte: new Date() },
+      })
+        .populate(
+          "author",
+          "username firstName lastName profileImage subscriptionPrice"
+        )
+        .sort({ publishedAt: -1 })
+        .limit(limitNum)
+        .lean();
+
+      // Get some popular public posts as suggestions (excluding user's own)
       const suggestedPosts = await Post.find({
+        author: { $ne: userId }, // Exclude user's own posts
         isActive: true,
         visibility: "public",
         publishedAt: { $lte: new Date() },
@@ -443,19 +450,26 @@ const getHomeFeed = async (req, res, next) => {
           "username firstName lastName profileImage subscriptionPrice"
         )
         .sort({ likeCount: -1, createdAt: -1 })
-        .limit(limitNum)
+        .limit(Math.max(0, limitNum - userPosts.length)) // Fill remaining slots with suggestions
         .lean();
 
-      const formattedSuggested = await Promise.all(
-        suggestedPosts.map(async (post) => {
+      // Combine user posts and suggestions
+      const allPosts = [...userPosts, ...suggestedPosts];
+
+      const formattedPosts = await Promise.all(
+        allPosts.map(async (post) => {
+          const userLiked = post.likes?.some(
+            (like) => like.user.toString() === userId.toString()
+          );
           const subscriberCount = await getSubscriberCount(post.author._id);
+          const isOwnPost = post.author._id.toString() === userId.toString();
+
           return {
             _id: post._id,
             title: post.title,
             content: post.content,
             images: post.images,
             videos: post.videos,
-            isExclusive: post.isExclusive,
             visibility: post.visibility,
             tags: post.tags,
             likeCount: post.likes?.length || 0,
@@ -463,7 +477,7 @@ const getHomeFeed = async (req, res, next) => {
               post.comments?.filter((c) => !c.isDeleted).length || 0,
             viewCount: post.viewCount,
             shareCount: post.shareCount,
-            userLiked: false, // User not subscribed, so no access to like
+            userLiked,
             author: {
               ...post.author,
               subscriberCount,
@@ -471,35 +485,41 @@ const getHomeFeed = async (req, res, next) => {
             createdAt: post.createdAt,
             updatedAt: post.updatedAt,
             publishedAt: post.publishedAt,
-            isSuggested: true,
+            isSuggested: !isOwnPost && userPosts.length > 0, // Mark as suggested if not own post and user has posts
+            isOwnPost,
           };
         })
       );
 
       return res.json({
         success: true,
-        message: "No active subscriptions. Here are some suggested creators.",
-        posts: formattedSuggested,
+        message:
+          userPosts.length > 0
+            ? "Showing your posts and suggested creators."
+            : "No posts yet. Here are some suggested creators.",
+        posts: formattedPosts,
         pagination: {
           currentPage: pageNum,
           totalPages: 1,
-          totalCount: suggestedPosts.length,
+          totalCount: allPosts.length,
           limit: limitNum,
           hasNext: false,
           hasPrev: false,
         },
         hasSubscriptions: false,
+        userPostsCount: userPosts.length,
       });
     }
 
-    // Build query for posts from subscribed creators
+    // Build query for posts from subscribed creators AND user's own posts
     const query = {
-      author: { $in: creatorIds },
+      author: { $in: allAuthorIds },
       isActive: true,
       publishedAt: { $lte: new Date() }, // Only published posts
       $or: [
         { visibility: "public" },
         { visibility: "subscribers" }, // User is subscribed, so can see subscriber-only content
+        { author: userId }, // User can always see their own posts regardless of visibility
       ],
     };
 
@@ -524,6 +544,7 @@ const getHomeFeed = async (req, res, next) => {
           (like) => like.user.toString() === userId.toString()
         );
         const subscriberCount = await getSubscriberCount(post.author._id);
+        const isOwnPost = post.author._id.toString() === userId.toString();
 
         return {
           _id: post._id,
@@ -531,7 +552,6 @@ const getHomeFeed = async (req, res, next) => {
           content: post.content,
           images: post.images,
           videos: post.videos,
-          isExclusive: post.isExclusive,
           visibility: post.visibility,
           tags: post.tags,
           likeCount: post.likes?.length || 0,
@@ -547,6 +567,7 @@ const getHomeFeed = async (req, res, next) => {
           updatedAt: post.updatedAt,
           publishedAt: post.publishedAt,
           isSuggested: false,
+          isOwnPost,
         };
       })
     );

@@ -56,10 +56,7 @@ const postSchema = new mongoose.Schema(
         },
       },
     ],
-    isExclusive: {
-      type: Boolean,
-      default: false,
-    },
+
     likes: [
       {
         user: {

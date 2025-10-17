@@ -40,11 +40,6 @@ const createPostValidation = [
     .isLength({ max: 500 })
     .withMessage("Video caption must be less than 500 characters"),
 
-  body("isExclusive")
-    .optional()
-    .isBoolean()
-    .withMessage("isExclusive must be a boolean"),
-
   body("visibility")
     .optional()
     .isIn(["public", "subscribers", "private"])
@@ -83,11 +78,6 @@ const postQueryValidation = [
     .optional()
     .isIn(["public", "subscribers", "private"])
     .withMessage("Visibility must be public, subscribers, or private"),
-
-  query("isExclusive")
-    .optional()
-    .isBoolean()
-    .withMessage("isExclusive must be a boolean"),
 
   query("authorId")
     .optional()
