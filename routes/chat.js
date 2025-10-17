@@ -5,6 +5,7 @@ const {
   getMessages,
   sendMessage,
   startConversation,
+  getOrCreateConversation,
 } = require("../controllers/chatController");
 const { authenticate } = require("../middleware/authMiddleware");
 
@@ -22,5 +23,8 @@ router.post("/messages", sendMessage);
 
 // Start a new conversation
 router.post("/conversations", startConversation);
+
+// Get or create conversation with a specific user
+router.get("/conversations/user/:userId", getOrCreateConversation);
 
 module.exports = router;

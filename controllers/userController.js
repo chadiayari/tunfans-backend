@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/user_model");
 const Subscription = require("../models/subscription_model");
+const Post = require("../models/post_model");
 const createError = require("http-errors");
 const { validationResult } = require("express-validator");
 
@@ -36,6 +37,40 @@ const getSubscriptionCount = async (userId) => {
     return count;
   } catch (error) {
     console.error("Error getting subscription count:", error);
+    return 0;
+  }
+};
+
+// Helper function to check if user is subscribed to a creator
+const checkSubscriptionStatus = async (subscriberId, creatorId) => {
+  try {
+    if (!subscriberId || !creatorId) {
+      return false;
+    }
+
+    const subscription = await Subscription.findOne({
+      subscriber: subscriberId,
+      creator: creatorId,
+      status: "active",
+      endDate: { $gt: new Date() }, // Not expired
+    });
+
+    return !!subscription;
+  } catch (error) {
+    console.error("Error checking subscription status:", error);
+    return false;
+  }
+};
+
+// Helper function to get real-time post count
+const getPostCount = async (userId) => {
+  try {
+    const count = await Post.countDocuments({
+      author: userId,
+    });
+    return count;
+  } catch (error) {
+    console.error("Error getting post count:", error);
     return 0;
   }
 };
@@ -132,10 +167,19 @@ const loginUser = async (req, res, next) => {
   }
 };
 
-// Get user profile with children and orders
+// Get user profile by username (for viewing other users' profiles)
 const getUserProfile = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user._id).select("-password");
+    const { username } = req.params;
+
+    if (!username) {
+      return next(createError(400, "Username is required"));
+    }
+
+    const user = await User.findOne({
+      username: username,
+      isActive: true,
+    }).select("-password -payoutMethods -totalEarnings -availableBalance");
 
     if (!user) {
       return next(createError(404, "User not found"));
@@ -144,6 +188,15 @@ const getUserProfile = async (req, res, next) => {
     // Get real-time counts
     const subscriberCount = await getSubscriberCount(user._id);
     const subscriptionCount = await getSubscriptionCount(user._id);
+    const postCount = await getPostCount(user._id);
+
+    // Check if current user is subscribed to this profile (only if user is authenticated)
+    let isSubscribed = false;
+    console.log("req.user:", req.user);
+    console.log("user:", user);
+    if (req.user && req.user._id.toString() !== user._id.toString()) {
+      isSubscribed = await checkSubscriptionStatus(req.user._id, user._id);
+    }
 
     res.json({
       success: true,
@@ -152,16 +205,22 @@ const getUserProfile = async (req, res, next) => {
         username: user.username,
         firstName: user.firstName,
         lastName: user.lastName,
-        email: user.email,
-        role: user.role,
         profileImage: user.profileImage,
         coverImage: user.coverImage,
         bio: user.bio,
         subscriptionPrice: user.subscriptionPrice,
         subscriberCount,
         subscriptionCount,
+        postCount,
+        isSubscribed,
+        role: user.role,
         createdAt: user.createdAt,
-        isActive: user.isActive,
+        // Only show email if it's the current user or an admin
+        ...(req.user &&
+        (req.user._id.toString() === user._id.toString() ||
+          req.user.role === "admin")
+          ? { email: user.email }
+          : {}),
       },
     });
   } catch (error) {
@@ -631,6 +690,12 @@ const getUserByUsername = async (req, res, next) => {
     const subscriberCount = await getSubscriberCount(user._id);
     const subscriptionCount = await getSubscriptionCount(user._id);
 
+    // Check if current user is subscribed to this profile (only if user is authenticated)
+    let isSubscribed = false;
+    if (req.user && req.user._id.toString() !== user._id.toString()) {
+      isSubscribed = await checkSubscriptionStatus(req.user._id, user._id);
+    }
+
     // Return public profile information
     res.json({
       success: true,
@@ -644,6 +709,7 @@ const getUserByUsername = async (req, res, next) => {
         subscriptionPrice: user.subscriptionPrice,
         subscriberCount,
         subscriptionCount,
+        isSubscribed,
         role: user.role,
         createdAt: user.createdAt,
         // Only show email if it's the current user or an admin
@@ -674,6 +740,7 @@ const getCurrentUser = async (req, res, next) => {
     // Get real-time counts
     const subscriberCount = await getSubscriberCount(user._id);
     const subscriptionCount = await getSubscriptionCount(user._id);
+    const postCount = await getPostCount(user._id);
 
     res.json({
       success: true,
@@ -688,6 +755,8 @@ const getCurrentUser = async (req, res, next) => {
         subscriptionPrice: user.subscriptionPrice,
         subscriberCount,
         subscriptionCount,
+        postCount,
+        isSubscribed: false, // User cannot be subscribed to themselves
         totalEarnings: user.totalEarnings,
         availableBalance: user.availableBalance,
         role: user.role,
@@ -738,11 +807,13 @@ const getFeaturedCreators = async (req, res, next) => {
       creators.map(async (creator) => {
         const subscriberCount = await getSubscriberCount(creator._id);
         const subscriptionCount = await getSubscriptionCount(creator._id);
+        const postCount = await getPostCount(creator._id);
 
         return {
           ...creator,
           subscriberCount,
           subscriptionCount,
+          postCount,
         };
       })
     );
@@ -776,6 +847,7 @@ const getFeaturedCreators = async (req, res, next) => {
       subscriptionPrice: creator.subscriptionPrice,
       subscriberCount: creator.subscriberCount,
       subscriptionCount: creator.subscriptionCount,
+      postCount: creator.postCount,
       role: creator.role,
       createdAt: creator.createdAt,
       // Add featured rank based on position
@@ -877,6 +949,7 @@ const getTrendingCreators = async (req, res, next) => {
         );
         const totalSubscriberCount = await getSubscriberCount(creator._id);
         const subscriptionCount = await getSubscriptionCount(creator._id);
+        const postCount = await getPostCount(creator._id);
 
         return {
           _id: creator._id,
@@ -889,6 +962,7 @@ const getTrendingCreators = async (req, res, next) => {
           subscriptionPrice: creator.subscriptionPrice,
           subscriberCount: totalSubscriberCount,
           subscriptionCount,
+          postCount,
           recentSubscribers: trendingInfo?.recentSubscribers || 0,
           role: creator.role,
           createdAt: creator.createdAt,

@@ -19,9 +19,9 @@ const {
 } = require("../controllers/userController");
 const {
   uploadProfileImage,
-  createExclusiveContent,
-  getMyExclusiveContent,
-  getExclusiveContent,
+  createContent,
+  getMyContent,
+  getUserContent,
   getContentByCreator,
   updateExclusiveContent,
   deleteExclusiveContent,
@@ -81,7 +81,7 @@ router.post("/login", userLoginValidation, loginUser);
 
 // Protected routes (requires authentication)
 router.get("/me", authenticate, getCurrentUser);
-router.get("/profile", authenticate, userOrAdmin, getUserProfile);
+router.get("/profile/:username", authenticate, userOrAdmin, getUserProfile);
 router.put(
   "/profile",
   authenticate,
@@ -125,18 +125,18 @@ router.post(
 );
 
 router.post(
-  "/exclusive-content",
+  "/content",
   authenticate,
   userOrAdmin,
   uploadExclusiveContent,
   processExclusiveContentUpload,
   createContentValidation,
-  createExclusiveContent,
+  createContent,
   handleUploadError
 );
 
 router.post(
-  "/exclusive-content/multiple",
+  "/content/multiple",
   authenticate,
   userOrAdmin,
   uploadMultipleExclusiveContent,
@@ -145,35 +145,24 @@ router.post(
 );
 
 // Content management routes
-router.get(
-  "/exclusive-content",
-  authenticate,
-  userOrAdmin,
-  getMyExclusiveContent
-);
-router.get(
-  "/exclusive-content/:contentId",
-  authenticate,
-  userOrAdmin,
-  contentIdValidation,
-  getExclusiveContent
-);
+router.get("/content", authenticate, userOrAdmin, getMyContent);
+router.get("/:username/content", authenticate, userOrAdmin, getUserContent);
 router.put(
-  "/exclusive-content/:contentId",
+  "/content/:contentId",
   authenticate,
   userOrAdmin,
   updateContentValidation,
   updateExclusiveContent
 );
 router.delete(
-  "/exclusive-content/:contentId",
+  "/content/:contentId",
   authenticate,
   userOrAdmin,
   contentIdValidation,
   deleteExclusiveContent
 );
 router.post(
-  "/exclusive-content/:contentId/like",
+  "/content/:contentId/like",
   authenticate,
   userOrAdmin,
   contentIdValidation,
@@ -192,7 +181,7 @@ router.get(
 
 // Private content access URL generation
 router.get(
-  "/exclusive-content/access/:key",
+  "/content/access/:key",
   authenticate,
   userOrAdmin,
   getPrivateContentUrl

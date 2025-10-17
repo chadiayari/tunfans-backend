@@ -1,5 +1,6 @@
 const Content = require("../models/content_model");
 const User = require("../models/user_model");
+const Subscription = require("../models/subscription_model");
 const createError = require("http-errors");
 const { validationResult } = require("express-validator");
 const { generateSignedUrl } = require("../utils/contentUpload");
@@ -35,8 +36,8 @@ const uploadProfileImage = async (req, res, next) => {
   }
 };
 
-// Create exclusive content with metadata
-const createExclusiveContent = async (req, res, next) => {
+// Create exclusive content (unified function)
+const createContent = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -47,167 +48,170 @@ const createExclusiveContent = async (req, res, next) => {
       return next(createError(400, "No content file uploaded"));
     }
 
-    const {
-      title,
-      description,
-      price = 0,
-      tags,
-      isSubscriberOnly = true,
-    } = req.body;
+    const { title, description } = req.body;
     const userId = req.user._id;
 
-    // Parse tags if they come as a string
-    let parsedTags = [];
-    if (tags) {
-      try {
-        parsedTags = typeof tags === "string" ? JSON.parse(tags) : tags;
-      } catch (e) {
-        parsedTags =
-          typeof tags === "string"
-            ? tags.split(",").map((tag) => tag.trim())
-            : tags;
-      }
-    }
-
-    // Create content metadata
+    // Create content record
     const content = new Content({
       creator: userId,
       title,
       description,
-      contentType: req.uploadResult.contentType,
       filename: req.uploadResult.filename,
       originalname: req.uploadResult.originalname,
       mimetype: req.uploadResult.mimetype,
       size: req.uploadResult.size,
       s3Key: req.uploadResult.key,
-      price: parseFloat(price),
-      tags: parsedTags,
-      isSubscriberOnly:
-        isSubscriberOnly === "true" || isSubscriberOnly === true,
     });
 
     await content.save();
-
-    res.status(201).json({
-      success: true,
-      message: "Exclusive content uploaded successfully",
-      content: {
-        _id: content._id,
-        title: content.title,
-        description: content.description,
-        contentType: content.contentType,
-        filename: content.filename,
-        price: content.price,
-        tags: content.tags,
-        isSubscriberOnly: content.isSubscriberOnly,
-        createdAt: content.createdAt,
-      },
-    });
-  } catch (error) {
-    console.error("Create exclusive content error:", error);
-    next(error);
-  }
-};
-
-// Get user's own exclusive content
-const getMyExclusiveContent = async (req, res, next) => {
-  try {
-    const userId = req.user._id;
-    const {
-      page = 1,
-      limit = 20,
-      contentType,
-      status = "published",
-      sortBy = "createdAt",
-      sortOrder = "desc",
-    } = req.query;
-
-    const options = {
-      status,
-      limit: parseInt(limit),
-      skip: (parseInt(page) - 1) * parseInt(limit),
-      sort: { [sortBy]: sortOrder === "desc" ? -1 : 1 },
-    };
-
-    if (contentType) {
-      options.contentType = contentType;
-    }
-
-    const content = await Content.findByCreator(userId, options).select(
-      "-s3Key"
-    ); // Don't expose S3 key in the response
-
-    const totalContent = await Content.countDocuments({
-      creator: userId,
-      status,
-      ...(contentType && { contentType }),
-    });
-
-    res.json({
-      success: true,
-      content,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total: totalContent,
-        pages: Math.ceil(totalContent / parseInt(limit)),
-      },
-    });
-  } catch (error) {
-    console.error("Get my exclusive content error:", error);
-    next(error);
-  }
-};
-
-// Get exclusive content for viewing (with access control)
-const getExclusiveContent = async (req, res, next) => {
-  try {
-    const { contentId } = req.params;
-    const userId = req.user._id;
-
-    const content = await Content.findById(contentId).populate(
+    await content.populate(
       "creator",
       "username firstName lastName profileImage"
     );
 
-    if (!content) {
-      return next(createError(404, "Content not found"));
-    }
-
-    // Check access permissions
-    const isOwner = content.creator._id.toString() === userId.toString();
-
-    if (!isOwner) {
-      // TODO: Implement subscription checks here
-      // For now, only allow access to own content
-      return next(createError(403, "Access denied. Subscription required."));
-    }
-
-    // Generate signed URL for accessing the content
-    const signedUrl = await generateSignedUrl(content.s3Key, 3600);
-
-    // Increment view count
-    await content.incrementViews();
-
-    res.json({
+    res.status(201).json({
       success: true,
+      message: "Content uploaded successfully",
       content: {
         _id: content._id,
         title: content.title,
         description: content.description,
-        contentType: content.contentType,
-        price: content.price,
-        tags: content.tags,
-        views: content.views,
-        likes: content.likes,
+        filename: content.filename,
+        originalname: content.originalname,
+        mimetype: content.mimetype,
+        size: content.size,
         creator: content.creator,
         createdAt: content.createdAt,
-        accessUrl: signedUrl,
-        expiresIn: 3600,
+        updatedAt: content.updatedAt,
       },
     });
   } catch (error) {
-    console.error("Get exclusive content error:", error);
+    console.error("Create content error:", error);
+    next(error);
+  }
+};
+
+// Get user's content with pagination
+const getUserContent = async (req, res, next) => {
+  try {
+    const { username } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+    const requestingUserId = req.user._id;
+
+    // Find user by username
+    const User = require("../models/user_model");
+    const user = await User.findOne({ username, isActive: true }).select("_id");
+
+    if (!user) {
+      return next(createError(404, "User not found"));
+    }
+
+    const userId = user._id;
+
+    // Check if requesting user has subscription to view content
+    let hasAccess = userId.toString() === requestingUserId.toString();
+
+    if (!hasAccess) {
+      const Subscription = require("../models/subscription_model");
+      const subscription = await Subscription.findOne({
+        subscriber: requestingUserId,
+        creator: userId,
+        status: "active",
+      });
+      hasAccess = !!subscription;
+    }
+
+    const skip = (page - 1) * limit;
+
+    const content = await Content.find({ creator: userId })
+      .select(
+        hasAccess
+          ? "title description filename price tags isSubscriberOnly createdAt s3Key"
+          : "title description price tags isSubscriberOnly createdAt"
+      )
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .populate("creator", "username profileImage");
+
+    const total = await Content.countDocuments({ creator: userId });
+
+    // Generate signed URLs for accessible content
+    const contentWithUrls = await Promise.all(
+      content.map(async (item) => {
+        const contentObj = item.toObject();
+
+        if (hasAccess && contentObj.s3Key) {
+          contentObj.accessUrl = await generateSignedUrl(contentObj.s3Key);
+        }
+
+        // Remove s3Key from response for security
+        delete contentObj.s3Key;
+
+        return contentObj;
+      })
+    );
+
+    res.json({
+      success: true,
+      content: contentWithUrls,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit),
+      },
+      hasAccess,
+    });
+  } catch (error) {
+    console.error("Get user content error:", error);
+    next(error);
+  }
+};
+
+// Get user's own content
+const getMyContent = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 10 } = req.query;
+    const userId = req.user._id;
+
+    const skip = (page - 1) * limit;
+
+    const content = await Content.find({ creator: userId })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Content.countDocuments({ creator: userId });
+
+    // Generate signed URLs for all content (user can access their own content)
+    const contentWithUrls = await Promise.all(
+      content.map(async (item) => {
+        const contentObj = item.toObject();
+
+        if (contentObj.s3Key) {
+          contentObj.accessUrl = await generateSignedUrl(contentObj.s3Key);
+        }
+
+        // Remove s3Key from response for security
+        delete contentObj.s3Key;
+
+        return contentObj;
+      })
+    );
+
+    res.json({
+      success: true,
+      content: contentWithUrls,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    console.error("Get my content error:", error);
     next(error);
   }
 };
@@ -216,7 +220,7 @@ const getExclusiveContent = async (req, res, next) => {
 const getContentByCreator = async (req, res, next) => {
   try {
     const { creatorId } = req.params;
-    const { page = 1, limit = 20, contentType } = req.query;
+    const { page = 1, limit = 20 } = req.query;
 
     const creator = await User.findById(creatorId).select(
       "username firstName lastName profileImage bio subscriptionPrice"
@@ -232,10 +236,6 @@ const getContentByCreator = async (req, res, next) => {
       sort: { createdAt: -1 },
     };
 
-    if (contentType) {
-      options.contentType = contentType;
-    }
-
     // Only return preview data, not access URLs
     const content = await Content.findByCreator(creatorId, options).select(
       "-s3Key -filename -originalname -mimetype -size"
@@ -244,7 +244,6 @@ const getContentByCreator = async (req, res, next) => {
     const totalContent = await Content.countDocuments({
       creator: creatorId,
       status: "published",
-      ...(contentType && { contentType }),
     });
 
     res.json({
@@ -386,9 +385,9 @@ const toggleContentLike = async (req, res, next) => {
 
 module.exports = {
   uploadProfileImage,
-  createExclusiveContent,
-  getMyExclusiveContent,
-  getExclusiveContent,
+  createContent,
+  getMyContent,
+  getUserContent,
   getContentByCreator,
   updateExclusiveContent,
   deleteExclusiveContent,

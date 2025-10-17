@@ -13,6 +13,7 @@ const userRouter = require("./routes/user");
 const adminRouter = require("./routes/admin");
 const chatRouter = require("./routes/chat");
 const postsRouter = require("./routes/posts");
+const notificationsRouter = require("./routes/notifications");
 const SocketService = require("./services/socketService");
 
 dotenv.config();
@@ -45,6 +46,7 @@ app.use("/api/users", userRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/chat", chatRouter);
 app.use("/api/posts", postsRouter);
+app.use("/api/notifications", notificationsRouter);
 
 app.use(
   express.static(path.join(__dirname, "public", "build"), {

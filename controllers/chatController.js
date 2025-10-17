@@ -279,9 +279,71 @@ const startConversation = async (req, res, next) => {
   }
 };
 
+// Get or create a conversation between users
+const getOrCreateConversation = async (req, res, next) => {
+  try {
+    const { userId: targetUserId, userModel = "User" } = req.params;
+    const { id: currentUserId } = req.user;
+    const currentUserRole = req.userRole;
+    const currentUserModel = currentUserRole === "admin" ? "Admin" : "User";
+
+    // Validate target user exists
+    const TargetUserModel = userModel === "Admin" ? Admin : User;
+    const targetUser = await TargetUserModel.findById(targetUserId);
+    if (!targetUser) {
+      return next(createError(404, "User not found"));
+    }
+
+    // Find or create conversation
+    let conversation = await Conversation.findBetweenUsers(
+      currentUserId,
+      currentUserModel,
+      targetUserId,
+      userModel
+    );
+
+    if (!conversation) {
+      conversation = new Conversation({
+        participants: [
+          { user: currentUserId, userModel: currentUserModel },
+          { user: targetUserId, userModel: userModel },
+        ],
+      });
+      await conversation.save();
+    }
+
+    await conversation.populate({
+      path: "participants.user",
+      select: "username email firstName lastName profileImage",
+    });
+
+    // Get the other participant
+    const otherParticipant = conversation.participants.find(
+      (p) => p.user._id.toString() !== currentUserId.toString()
+    );
+
+    res.json({
+      success: true,
+      conversation: {
+        _id: conversation._id,
+        participant: otherParticipant.user,
+        participantModel: otherParticipant.userModel,
+        lastMessage: conversation.lastMessage,
+        lastActivity: conversation.lastActivity,
+        createdAt: conversation.createdAt,
+        updatedAt: conversation.updatedAt,
+      },
+    });
+  } catch (error) {
+    console.error("Get or create conversation error:", error);
+    next(error);
+  }
+};
+
 module.exports = {
   getConversations,
   getMessages,
   sendMessage,
   startConversation,
+  getOrCreateConversation,
 };

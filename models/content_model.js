@@ -18,11 +18,6 @@ const contentSchema = new mongoose.Schema(
       trim: true,
       maxlength: 1000,
     },
-    contentType: {
-      type: String,
-      enum: ["image", "video"],
-      required: true,
-    },
     filename: {
       type: String,
       required: true,
@@ -44,10 +39,7 @@ const contentSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
-    isPrivate: {
-      type: Boolean,
-      default: true,
-    },
+    // All content is now exclusive/private by default
     // Pricing for individual content access
     price: {
       type: Number,
