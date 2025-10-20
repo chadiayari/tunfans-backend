@@ -63,7 +63,7 @@ const subscribeToCreator = async (req, res, next) => {
     });
 
     await subscription.save();
-    
+
     // Create notification for new subscription
     try {
       await NotificationService.createSubscriptionNotification(
@@ -72,10 +72,13 @@ const subscribeToCreator = async (req, res, next) => {
         subscription._id
       );
     } catch (notificationError) {
-      console.error("Error creating subscription notification:", notificationError);
+      console.error(
+        "Error creating subscription notification:",
+        notificationError
+      );
       // Don't fail the subscription operation if notification fails
     }
-    
+
     await subscription.populate(
       "creator",
       "username firstName lastName profileImage subscriptionPrice"

@@ -12,7 +12,6 @@ const {
   uploadProfileImage: userUploadProfileImage,
   uploadCoverImage,
   searchUsers,
-  getUserByUsername,
   getCurrentUser,
   getFeaturedCreators,
   getTrendingCreators,
@@ -21,7 +20,6 @@ const {
   createContent,
   updateExclusiveContent,
   deleteExclusiveContent,
-  toggleContentLike,
 } = require("../controllers/contentController");
 const {
   subscribeToCreator,

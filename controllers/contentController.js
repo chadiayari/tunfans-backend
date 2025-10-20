@@ -132,66 +132,8 @@ const deleteExclusiveContent = async (req, res, next) => {
   }
 };
 
-// Like/unlike content
-const toggleContentLike = async (req, res, next) => {
-  try {
-    const { contentId } = req.params;
-    const userId = req.user._id;
-
-    const content = await Content.findById(contentId);
-
-    if (!content) {
-      return next(createError(404, "Content not found"));
-    }
-
-    // Check if user already liked the content
-    const existingLikeIndex = content.likedBy ? content.likedBy.findIndex(
-      (like) => like.toString() === userId.toString()
-    ) : -1;
-
-    let isLiked;
-    if (existingLikeIndex > -1) {
-      // Unlike the content
-      content.likedBy.splice(existingLikeIndex, 1);
-      content.likes = Math.max(0, content.likes - 1);
-      isLiked = false;
-    } else {
-      // Like the content
-      if (!content.likedBy) content.likedBy = [];
-      content.likedBy.push(userId);
-      content.likes += 1;
-      isLiked = true;
-      
-      // Create notification for content like (only when liking, not unliking)
-      try {
-        await NotificationService.createContentLikeNotification(
-          userId,
-          content.creator,
-          contentId
-        );
-      } catch (notificationError) {
-        console.error("Error creating content like notification:", notificationError);
-        // Don't fail the like operation if notification fails
-      }
-    }
-
-    await content.save();
-
-    res.json({
-      success: true,
-      message: isLiked ? "Content liked" : "Content unliked",
-      isLiked,
-      likes: content.likes,
-    });
-  } catch (error) {
-    console.error("Toggle content like error:", error);
-    next(error);
-  }
-};
-
 module.exports = {
   createContent,
   updateExclusiveContent,
   deleteExclusiveContent,
-  toggleContentLike,
 };

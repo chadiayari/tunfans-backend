@@ -74,6 +74,11 @@ const userSchema = new mongoose.Schema({
     maxlength: 500,
     default: "",
   },
+  location: {
+    type: String,
+    maxlength: 500,
+    default: "",
+  },
   // Subscription-related fields
   subscriptionPrice: {
     type: Number,

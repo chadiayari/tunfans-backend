@@ -206,6 +206,7 @@ const getUserProfile = async (req, res, next) => {
         profileImage: user.profileImage,
         coverImage: user.coverImage,
         bio: user.bio,
+        location: user.location,
         subscriptionPrice: user.subscriptionPrice,
         subscriberCount,
         subscriptionCount,
@@ -229,7 +230,7 @@ const getUserProfile = async (req, res, next) => {
 
 const updateUserProfile = async (req, res, next) => {
   try {
-    const { username, email } = req.body;
+    const { username, email, bio, location, firstName, lastName } = req.body;
 
     const user = await User.findById(req.user._id);
 
@@ -260,14 +261,46 @@ const updateUserProfile = async (req, res, next) => {
       user.email = email;
     }
 
+    // Update bio if provided
+    if (bio !== undefined) {
+      user.bio = bio;
+    }
+
+    // Update location if provided
+    if (location !== undefined) {
+      user.location = location;
+    }
+
+    // Update first name if provided
+    if (firstName !== undefined) {
+      user.firstName = firstName;
+    }
+
+    // Update last name if provided
+    if (lastName !== undefined) {
+      user.lastName = lastName;
+    }
+
     await user.save();
 
     res.json({
-      _id: user._id,
-      username: user.username,
-      email: user.email,
-      role: user.role,
       success: true,
+      message: "Profile updated successfully",
+      user: {
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        bio: user.bio,
+        location: user.location,
+        role: user.role,
+        subscriptionPrice: user.subscriptionPrice,
+        profileImage: user.profileImage,
+        coverImage: user.coverImage,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      },
     });
   } catch (error) {
     console.error("Update profile error:", error);
@@ -660,64 +693,6 @@ const searchUsers = async (req, res, next) => {
   }
 };
 
-// Get user profile by username (public profile)
-const getUserByUsername = async (req, res, next) => {
-  try {
-    const { username } = req.params;
-
-    if (!username) {
-      return next(createError(400, "Username is required"));
-    }
-
-    const user = await User.findOne({
-      username: username,
-      isActive: true,
-    }).select("-password -payoutMethods -totalEarnings -availableBalance");
-
-    if (!user) {
-      return next(createError(404, "User not found"));
-    }
-
-    // Get real-time counts
-    const subscriberCount = await getSubscriberCount(user._id);
-    const subscriptionCount = await getSubscriptionCount(user._id);
-
-    // Check if current user is subscribed to this profile (only if user is authenticated)
-    let isSubscribed = false;
-    if (req.user && req.user._id.toString() !== user._id.toString()) {
-      isSubscribed = await checkSubscriptionStatus(req.user._id, user._id);
-    }
-
-    // Return public profile information
-    res.json({
-      success: true,
-      user: {
-        _id: user._id,
-        username: user.username,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        profileImage: user.profileImage,
-        coverImage: user.coverImage,
-        subscriptionPrice: user.subscriptionPrice,
-        subscriberCount,
-        subscriptionCount,
-        isSubscribed,
-        role: user.role,
-        createdAt: user.createdAt,
-        // Only show email if it's the current user or an admin
-        ...(req.user &&
-        (req.user._id.toString() === user._id.toString() ||
-          req.user.role === "admin")
-          ? { email: user.email }
-          : {}),
-      },
-    });
-  } catch (error) {
-    console.error("Get user by username error:", error);
-    next(error);
-  }
-};
-
 // Get current logged-in user info
 const getCurrentUser = async (req, res, next) => {
   try {
@@ -742,6 +717,8 @@ const getCurrentUser = async (req, res, next) => {
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,
+        bio: user.bio,
+        location: user.location,
         profileImage: user.profileImage,
         coverImage: user.coverImage,
         subscriptionPrice: user.subscriptionPrice,
@@ -1023,7 +1000,6 @@ module.exports = {
   uploadProfileImage,
   uploadCoverImage,
   searchUsers,
-  getUserByUsername,
   getCurrentUser,
   getFeaturedCreators,
   getTrendingCreators,

@@ -134,19 +134,26 @@ class NotificationService {
   }
 
   // Create a post comment notification
-  static async createPostCommentNotification(commenterId, postAuthorId, postId, commentContent) {
+  static async createPostCommentNotification(
+    commenterId,
+    postAuthorId,
+    postId,
+    commentContent
+  ) {
     try {
       const User = require("../models/user_model");
       const commenter = await User.findById(commenterId).select(
         "username firstName lastName"
       );
 
-      if (!commenter || commenterId.toString() === postAuthorId.toString()) return null;
+      if (!commenter || commenterId.toString() === postAuthorId.toString())
+        return null;
 
       // Truncate comment content for notification
-      const truncatedContent = commentContent.length > 50 
-        ? commentContent.substring(0, 50) + "..." 
-        : commentContent;
+      const truncatedContent =
+        commentContent.length > 50
+          ? commentContent.substring(0, 50) + "..."
+          : commentContent;
 
       return await Notification.createNotification({
         recipient: postAuthorId,
@@ -154,7 +161,9 @@ class NotificationService {
         senderModel: "User",
         type: "post_comment",
         title: "New Comment",
-        message: `${commenter.firstName || commenter.username} commented: "${truncatedContent}"`,
+        message: `${
+          commenter.firstName || commenter.username
+        } commented: "${truncatedContent}"`,
         data: {
           postId,
           commentId: null, // Will be set by the caller if needed

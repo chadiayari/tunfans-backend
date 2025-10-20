@@ -41,6 +41,30 @@ const userUpdateValidation = [
     .isEmail()
     .normalizeEmail()
     .withMessage("Please provide a valid email address"),
+
+  body("firstName")
+    .optional()
+    .trim()
+    .isLength({ min: 1, max: 50 })
+    .withMessage("First name must be between 1 and 50 characters"),
+
+  body("lastName")
+    .optional()
+    .trim()
+    .isLength({ min: 1, max: 50 })
+    .withMessage("Last name must be between 1 and 50 characters"),
+
+  body("bio")
+    .optional()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage("Bio must not exceed 500 characters"),
+
+  body("location")
+    .optional()
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage("Location must not exceed 100 characters"),
 ];
 
 const subscriptionPriceValidation = [
