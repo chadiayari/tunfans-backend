@@ -988,6 +988,164 @@ const getTrendingCreators = async (req, res, next) => {
   }
 };
 
+// Get user's subscribers by username
+const getUserSubscribers = async (req, res, next) => {
+  try {
+    const { username } = req.params;
+    const { status = "active", page = 1, limit = 10 } = req.query;
+
+    // Find user by username
+    const user = await User.findOne({ username, isActive: true }).select(
+      "_id username"
+    );
+
+    if (!user) {
+      return next(createError(404, "User not found"));
+    }
+
+    const Subscription = require("../models/subscription_model");
+
+    let query = { creator: user._id };
+
+    if (status !== "all") {
+      if (status === "active") {
+        query.status = "active";
+        query.endDate = { $gt: new Date() };
+      } else {
+        query.status = status;
+      }
+    }
+
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const subscriptions = await Subscription.find(query)
+      .populate("subscriber", "username firstName lastName profileImage bio")
+      .sort({ createdAt: -1 })
+      .limit(limitNum)
+      .skip(skip);
+
+    const total = await Subscription.countDocuments(query);
+
+    const subscribers = subscriptions.map((sub) => ({
+      _id: sub.subscriber._id,
+      username: sub.subscriber.username,
+      firstName: sub.subscriber.firstName,
+      lastName: sub.subscriber.lastName,
+      profileImage: sub.subscriber.profileImage,
+      bio: sub.subscriber.bio,
+      subscriptionInfo: {
+        subscriptionId: sub._id,
+        status: sub.status,
+        startDate: sub.startDate,
+        endDate: sub.endDate,
+        daysRemaining: sub.daysRemaining(),
+        hasAccess: sub.hasAccess(),
+      },
+    }));
+
+    res.json({
+      success: true,
+      user: {
+        _id: user._id,
+        username: user.username,
+      },
+      subscribers,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum),
+      },
+    });
+  } catch (error) {
+    console.error("Get user subscribers error:", error);
+    next(error);
+  }
+};
+
+// Get user's subscriptions by username
+const getUserSubscriptions = async (req, res, next) => {
+  try {
+    const { username } = req.params;
+    const { status = "active", page = 1, limit = 10 } = req.query;
+
+    // Find user by username
+    const user = await User.findOne({ username, isActive: true }).select(
+      "_id username"
+    );
+
+    if (!user) {
+      return next(createError(404, "User not found"));
+    }
+
+    const Subscription = require("../models/subscription_model");
+
+    let query = { subscriber: user._id };
+
+    if (status !== "all") {
+      if (status === "active") {
+        query.status = "active";
+        query.endDate = { $gt: new Date() };
+      } else {
+        query.status = status;
+      }
+    }
+
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const subscriptions = await Subscription.find(query)
+      .populate(
+        "creator",
+        "username firstName lastName profileImage bio subscriptionPrice"
+      )
+      .sort({ createdAt: -1 })
+      .limit(limitNum)
+      .skip(skip);
+
+    const total = await Subscription.countDocuments(query);
+
+    const creators = subscriptions.map((sub) => ({
+      _id: sub.creator._id,
+      username: sub.creator.username,
+      firstName: sub.creator.firstName,
+      lastName: sub.creator.lastName,
+      profileImage: sub.creator.profileImage,
+      bio: sub.creator.bio,
+      subscriptionPrice: sub.creator.subscriptionPrice,
+      subscriptionInfo: {
+        subscriptionId: sub._id,
+        status: sub.status,
+        startDate: sub.startDate,
+        endDate: sub.endDate,
+        daysRemaining: sub.daysRemaining(),
+        hasAccess: sub.hasAccess(),
+      },
+    }));
+
+    res.json({
+      success: true,
+      user: {
+        _id: user._id,
+        username: user.username,
+      },
+      subscriptions: creators,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum),
+      },
+    });
+  } catch (error) {
+    console.error("Get user subscriptions error:", error);
+    next(error);
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
@@ -1003,4 +1161,6 @@ module.exports = {
   getCurrentUser,
   getFeaturedCreators,
   getTrendingCreators,
+  getUserSubscribers,
+  getUserSubscriptions,
 };

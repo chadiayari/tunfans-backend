@@ -15,6 +15,8 @@ const {
   getCurrentUser,
   getFeaturedCreators,
   getTrendingCreators,
+  getUserSubscribers,
+  getUserSubscriptions,
 } = require("../controllers/userController");
 const {
   createContent,
@@ -24,8 +26,6 @@ const {
 const {
   subscribeToCreator,
   unsubscribeFromCreator,
-  getMySubscriptions,
-  getMySubscribers,
   checkSubscriptionStatus,
   toggleAutoRenewal,
 } = require("../controllers/subscriptionController");
@@ -50,7 +50,6 @@ const {
   subscribeToCreatorValidation,
   creatorIdParamValidation,
   subscriptionIdParamValidation,
-  subscriptionQueryValidation,
 } = require("../validators/subscriptionValidators");
 const {
   uploadProfileImage: uploadProfileImageMiddleware,
@@ -203,22 +202,6 @@ router.delete(
 );
 
 router.get(
-  "/subscriptions",
-  authenticate,
-  userOrAdmin,
-  subscriptionQueryValidation,
-  getMySubscriptions
-);
-
-router.get(
-  "/subscribers",
-  authenticate,
-  userOrAdmin,
-  subscriptionQueryValidation,
-  getMySubscribers
-);
-
-router.get(
   "/subscription-status/:username",
   authenticate,
   userOrAdmin,
@@ -245,5 +228,9 @@ router.get(
   trendingCreatorsValidation,
   getTrendingCreators
 );
+
+// Get user's subscribers and subscriptions by username
+router.get("/:username/subscribers", getUserSubscribers);
+router.get("/:username/subscriptions", getUserSubscriptions);
 
 module.exports = router;
